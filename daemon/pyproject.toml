@@ -1,0 +1,13 @@
+[project]
+name = "daemon"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "beautifulsoup4>=4.15.0",
+    "google-genai>=2.23.0",
+    "httpx>=0.28.1",
+    "python-dotenv>=1.2.3",
+    "python-telegram-bot>=22.8",
+]
