@@ -70,3 +70,46 @@ class BlackboardState(BaseModel):
     markdown_content: Optional[str] = None
     briefing_summary: Optional[str] = None
     competencies: List[str] = Field(default_factory=list)
+
+
+class TaskStatus(str, Enum):
+    """작업 카드의 생명주기 상태"""
+    QUEUED = "QUEUED"
+    PROCESSING = "PROCESSING"
+    REVIEW_STAGED = "REVIEW_STAGED"
+    COMMITTED = "COMMITTED"
+    REJECTED = "REJECTED"
+
+
+class AgentRole(str, Enum):
+    """가상 AI 기업의 직급별 역할"""
+    WORKER = "WORKER"        # 말단 직원 (파싱/초안)
+    CRITIC = "CRITIC"        # 팀장 (QA/85점 검수)
+    DIRECTOR = "DIRECTOR"    # 부장 (온톨로지/장기활용)
+    PRESIDENT = "PRESIDENT"  # 사장 (전략/최종가치)
+    SYSTEM = "SYSTEM"
+
+
+class ThinkingStep(BaseModel):
+    """대시보드 아코디언에 실시간 스트리밍되는 사고 단계"""
+    step_index: int
+    agent_role: AgentRole = AgentRole.WORKER
+    step_title: str
+    log_content: str
+    elapsed_ms: Optional[int] = None
+
+
+class TaskCard(BaseModel):
+    """웹 대시보드 및 텔레그램 큐에서 관리되는 표준 작업 카드"""
+    task_id: str
+    title: str
+    source_url: Optional[str] = None
+    status: TaskStatus = TaskStatus.QUEUED
+    progress: int = 0
+    priority: str = "Medium"
+    created_at: str = Field(default_factory=lambda: datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+    thinking_steps: List[ThinkingStep] = Field(default_factory=list)
+    extracted_synthesis: Optional[str] = None
+    markdown_draft: Optional[str] = None
+    warning_message: Optional[str] = None
+    integrity_score: float = 100.0

@@ -14,7 +14,7 @@ class CriticValidator:
     def __init__(self, indexer: VaultIndexer):
         self.client = genai.Client(api_key=GEMINI_API_KEY)
         self.indexer = indexer
-        self.model_name = "gemini-3.5-flash"
+        self.model_name = "gemini-3.1-flash-lite"
 
     def evaluate_candidates(
         self,

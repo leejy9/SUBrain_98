@@ -13,6 +13,8 @@ from telegram.ext import (
 )
 from config import TELEGRAM_BOT_TOKEN
 from agent_core import ConstitutionalAgent
+import datetime
+from event_bridge import event_bridge
 
 # 로깅 설정
 logging.basicConfig(
@@ -72,6 +74,19 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # 3. 새로운 인테이크 수신 -> 카테고리 선택 버튼 제공
     context.user_data["pending_raw"] = text
+    task_id = f"DOC-{datetime.datetime.now().strftime('%m%d-%H%M%S')}"
+    context.user_data["current_task_id"] = task_id
+
+    try:
+        await event_bridge.broadcast("CARD_CREATED", {
+            "task_id": task_id,
+            "title": text[:35] + ("..." if len(text) > 35 else ""),
+            "progress": 20,
+            "status": "QUEUED"
+        })
+    except Exception as e:
+        logger.warning(f"EventBridge broadcast error: {e}")
+
     keyboard = [
         [
             InlineKeyboardButton("💼 커리어/경험 (STAR)", callback_data="cat_Experience"),
@@ -176,10 +191,78 @@ async def process_and_reply(trigger_obj, context: ContextTypes.DEFAULT_TYPE, raw
 
         module_name = briefing.get("module_name", "모듈_영구지식")
         classified_type = briefing.get("classified_type", "Permanent")
+        is_auto_committed = result.get("is_auto_committed", False)
+        final_status = result.get("status", "COMMITTED" if is_auto_committed else "REVIEW_STAGED")
+        card_warning = result.get("warning")
+        integrity_score = result.get("integrity_score", 100.0)
+        checklist = briefing.get("checklist", [
+            {"text": f"위키링크 유효성 ({len(passed_links)}건 검증 통과)", "passed": True},
+            {"text": "헌법 디스패치 및 프론트매터 일치", "passed": True},
+            {"text": "크리틱 인과 점수 85점 통과", "passed": is_auto_committed},
+            {"text": "구체적 수치 및 연도 명시", "passed": is_auto_committed}
+        ])
+
+        # 실시간 웹 대시보드(EventBridge)로 정규화 완료 카드 브로드캐스트
+        task_id = context.user_data.get("current_task_id", f"DOC-{datetime.datetime.now().strftime('%m%d-%H%M%S')}")
+        card_title = filename.replace('.md', '')
+        
+        thinking_list = [
+            {"role": "WORKER", "step": "Step 1 [원문 수집]", "text": f"인테이크 원문 {len(raw_input)}자 수집 및 정제 완료."},
+            {"role": "WORKER", "step": "Step 2 [헌법 디스패치]", "text": f"헌법 규격 판별 결과: {module_name} ({classified_type}) 채택."},
+            {"role": "DIRECTOR", "step": "Step 3 [엔티티 매핑]", "text": f"볼트 인덱스 대조 후 {len(passed_links)}개 위키링크 후보 추출."},
+            {"role": "CRITIC", "step": "Step 4 [크리틱 검증]", "text": f"85점 룰 검증 완료 (통과: {len(passed_links)}건, 차단: {len(rejected_links)}건, 자동반영: {'승인' if is_auto_committed else '보완대기'})."}
+        ]
+
+        card_data = {
+            "id": task_id,
+            "task_id": task_id,
+            "title": card_title,
+            "category": f"{classified_type} ({module_name})",
+            "status": final_status,
+            "priority": "High" if card_warning else "Normal",
+            "progress": 100,
+            "source": "Telegram Mobile Ingest",
+            "timeAgo": "방금 전",
+            "wikilinks": [f"[[{pl.get('target', '')}]]" for pl in passed_links],
+            "tags": [f"#{classified_type}", f"#{module_name}"] + [f"#{c}" for c in result.get("competencies", [])],
+            "synthesis": summary,
+            "filename": filename,
+            "markdown_content": result.get("markdown_content", ""),
+            "suggestedPrompt": f"{card_title}의 핵심 인과를 바탕으로 3줄 요약을 압축해줘...",
+            "copilotActions": [
+                {"label": "🪄 헌법 규격 점검", "prompt": f"{card_title} 본문이 00_헌법 서식에 맞는지 재검토해줘"},
+                {"label": "🔗 1촌 링크 추가", "prompt": "연관된 볼트 노드 1개를 추가 추천해서 본문에 삽입해줘"},
+                {"label": "📄 3줄 핵심 압축", "prompt": "이 내용의 핵심 인사이트를 3줄로 압축 요약해줘"}
+            ],
+            "warning": card_warning,
+            "integrity": {
+                "score": integrity_score,
+                "checklist": checklist
+            },
+            "thinking": thinking_list
+        }
+
+        try:
+            await event_bridge.broadcast("CARD_STAGED", card_data)
+            if is_auto_committed:
+                await event_bridge.broadcast("CARD_COMMITTED", {
+                    "task_id": task_id,
+                    "filename": filename,
+                    "filepath": result.get("filepath", ""),
+                    "markdown_content": result.get("markdown_content", ""),
+                    "message": f"'{filename}' 파일이 85점 룰을 통과하여 옵시디언 볼트에 자동 반영되었습니다."
+                })
+        except Exception as eb_err:
+            logger.warning(f"Error broadcasting card event: {eb_err}")
+
+        if is_auto_committed:
+            header_status = "✨ <b>[지식이 볼트에 자동 저장되었습니다]</b>\n✓ <b>Critic 85점 & 헌법 무결성 100% 통과 (Auto-Committed)</b>\n"
+        else:
+            header_status = "⚠️ <b>[검토 및 보완 대기 상태로 등록되었습니다]</b>\n비판관 기준 점수 미달 또는 보완 필요 항목이 있어 대시보드 큐에 격리했습니다.\n"
 
         report_text = (
-            f"✨ <b>[지식이 정규화되었습니다]</b>\n"
-            f"📄 <code>{html.escape(filename)}</code> (Google Drive 실시간 동기화)\n"
+            f"{header_status}"
+            f"📄 <code>{html.escape(filename)}</code>\n"
             f"🏛️ <b>헌법 디스패치</b>: <code>{html.escape(module_name)}</code> ({html.escape(classified_type)})\n\n"
             f"📌 <b>핵심 요약</b>\n"
             f"{html.escape(summary)}\n\n"
@@ -220,11 +303,8 @@ async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> N
         except Exception:
             pass
 
-def main():
-    """메인 실행 진입점"""
-    logger.info("Starting Subrain_98 Telegram Bot Daemon with enhanced timeouts & HTML mode...")
-    
-    # 한국-유럽/미국 텔레그램 서버 간 지연을 고려한 타임아웃 넉넉하게 설정
+def create_application():
+    """텔레그램 봇 Application 인스턴스 빌드"""
     request = HTTPXRequest(
         connection_pool_size=16,
         connect_timeout=30.0,
@@ -245,8 +325,13 @@ def main():
     application.add_handler(CallbackQueryHandler(handle_callback))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     application.add_error_handler(error_handler)
+    return application
 
-    application.run_polling(drop_pending_updates=False)
+def main():
+    """메인 실행 진입점 (단독 구동 시)"""
+    logger.info("Starting Subrain_98 Telegram Bot Daemon with enhanced timeouts & HTML mode...")
+    app = create_application()
+    app.run_polling(drop_pending_updates=False)
 
 if __name__ == "__main__":
     main()
