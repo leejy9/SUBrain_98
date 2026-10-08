@@ -13,6 +13,7 @@ from config import GEMINI_API_KEY, VAULT_DIR
 from vault_indexer import VaultIndexer
 from models import BlackboardState, CriticEvaluation, SemanticLink, RejectedLink, CognitivePrimitive
 from critic_validator import CriticValidator
+import vault_io
 
 class ConstitutionalAgent:
     def __init__(self):
@@ -20,6 +21,10 @@ class ConstitutionalAgent:
         self.indexer = VaultIndexer()
         self.critic = CriticValidator(self.indexer)
         self.model_name = "gemini-3.1-flash-lite"
+
+    def set_critic_enabled(self, enabled: bool):
+        self.critic.enabled = enabled
+        logger.info(f"[ConstitutionalAgent] 비판관 활성화 상태 변경: {enabled}")
 
     def _extract_url_content(self, text: str) -> Tuple[str, str]:
         """텍스트에서 URL을 탐지하여 웹페이지 내용을 스크랩합니다."""
@@ -190,10 +195,11 @@ class ConstitutionalAgent:
 {user_context if user_context else "(없음)"}
 
 [작성 철칙]:
-1. 구체적 수치 및 사실 의무화 (Anti-Fluff)
-2. 절대 연도 의무화 ('2024.10~2025.06', '2026-09-14' 등)
-3. 당시 관점에서의 중요성(Why It Mattered Then)을 STAR 요약부에 필히 명시
-4. 파일명은 15자 이내 간결한 식별자 (.md 포함, 예: 경험_신규사업코칭.md)
+1. [절대 원칙 - 사실 무결성]: 입력 원문(raw_text_payload 및 user_context)에 직접 명시되지 않은 정량적 수치(%, 명, 원, 점수 등)나 조직/도구 고유명사를 절대로 지어내거나 부풀려 창작하지 말 것.
+2. 원문에 구체적 수치가 없으면 일반적인 정성적 사실로만 담백하게 기술하고, 보강이 필요하면 '[[수치 확인 필요]]' 형태로만 표기할 것.
+3. 절대 연도 의무화 ('2024.10~2025.06', '2026-09-14' 등)
+4. 당시 관점에서의 중요성(Why It Mattered Then)을 STAR 요약부에 필히 명시
+5. 파일명은 핵심 주제를 담은 간결한 식별자 (.md 포함, 예: 경험_신규사업코칭.md)
 
 반드시 아래 JSON 스키마로만 응답하세요:
 {{
@@ -276,7 +282,7 @@ class ConstitutionalAgent:
 {user_context if user_context else "(없음)"}
 
 [알맹이 작성 5대 철칙 (Anti-Fluff Rules)]:
-1. 구체적 수치 의무화: 원문의 금액, 비율, 수치 직접 인용
+1. [절대 원칙 - 사실 무결성]: 입력 원문의 금액, 비율, 수치만 직접 인용하며, 원문에 명시되지 않은 정량적 수치(%, 명, 금액 등)는 절대로 지어내지 말 것. 수치가 없으면 담백하게 인과를 서술하고 '[[수치 확인 필요]]'로 남길 것.
 2. 절대 연도 의무화: '2026년 6월', '2026-09-16'처럼 절대 연도 명시
 3. 관료주의 말투 금지: '~를 도모함' 등 금지, 실제 일어난 인과 스토리로 서술
 4. 기록 시점의 중요성(Why It Mattered Then) 필수 명시
@@ -313,13 +319,8 @@ class ConstitutionalAgent:
         gen_data = json.loads(gen_resp.text)
 
         raw_filename = gen_data.get("filename", f"{prefix}{datetime.date.today().strftime('%m%d_%H%M%S')}.md")
-        if not raw_filename.endswith(".md"):
-            raw_filename += ".md"
-        stem = raw_filename[:-3]
-        if len(stem) > 18:
-            filename = stem[:15] + ".md"
-        else:
-            filename = raw_filename
+        target_inbox_path, rel_filename = vault_io.resolve_unique_inbox_path(raw_filename)
+        filename = target_inbox_path.name
 
         # [3단계: Critic 비판관 검증기 - k-hop Ego Graph & 85점 임계치]
         proposed_candidates = gen_data.get("proposed_candidates", [])
@@ -524,9 +525,13 @@ moc: "[[{target_moc}]]"
         final_status = "COMMITTED" if is_auto_committed else "REVIEW_STAGED"
         overall_integrity_score = 100.0 if is_auto_committed else max(60.0, round(critic_score, 1))
 
-        # 로컬 옵시디언 볼트에 마크다운 파일 저장
-        target_path = VAULT_DIR / filename
-        target_path.write_text(markdown_content, encoding="utf-8")
+        # 로컬 옵시디언 볼트 _inbox/에 신규 마크다운 파일 안전 격리 저장
+        vault_io.safe_write(
+            rel_path=rel_filename,
+            content=markdown_content,
+            reason="인테이크 신규 노트 생성 (_inbox 격리)",
+            actor="intake"
+        )
 
         # [6단계: 직급별 3단계 계층 심층 검토 (Tech Lead, Executive, Quality Auditor)]
         executive_review = self.perform_executive_review(
@@ -590,10 +595,10 @@ moc: "[[{target_moc}]]"
 
     def refine_note(self, filename: str, feedback: str) -> Dict[str, Any]:
         """기존 노트를 사용자 피드백에 맞춰 재조정합니다."""
-        target_path = VAULT_DIR / filename
-        if not target_path.exists():
+        note_data = vault_io.read_note(filename)
+        if not note_data:
             return {"success": False, "error": f"{filename} 파일을 찾을 수 없습니다."}
-        current_content = target_path.read_text(encoding="utf-8")
+        current_content = note_data["content"]
         prompt = f"""
 당신은 옵시디언 볼트 헌법에 따라 기존 노트를 사용자의 피드백을 반영해 재정비하는 에이전트입니다.
 
@@ -603,7 +608,9 @@ moc: "[[{target_moc}]]"
 [사용자 수정 피드백]:
 {feedback}
 
-기존 마크다운의 구조와 전역 불변식(프론트매터, 연결망, 제로로스 창고, 크리틱 로그 등)을 엄격히 지키면서, 피드백을 정확히 반영한 완성된 전체 마크다운 본문을 작성하세요.
+[절대 철칙 - 사실 무결성]:
+1. 원문이나 기존 노트에 없는 정량적 수치나 고유명사를 임의로 지어내지 말 것.
+2. 기존 마크다운의 구조와 전역 불변식(프론트매터, 연결망, 제로로스 창고, 크리틱 로그 등)을 엄격히 지키면서, 피드백을 정확히 반영한 완성된 전체 마크다운 본문을 작성하세요.
 반드시 마크다운 본문만 출력하세요 (코드블록 ```markdown 없이 순수 텍스트).
 """
         resp = self._generate_with_retry(
@@ -617,7 +624,14 @@ moc: "[[{target_moc}]]"
             if lines and lines[-1].startswith("```"):
                 lines = lines[:-1]
             new_content = "\n".join(lines).strip()
-        target_path.write_text(new_content, encoding="utf-8")
+            
+        vault_io.safe_write(
+            rel_path=filename,
+            content=new_content,
+            expected_hash=note_data["hash"],
+            reason=f"사용자 피드백 반영: {feedback}",
+            actor="user"
+        )
         return {
             "success": True,
             "filename": filename,
@@ -625,11 +639,18 @@ moc: "[[{target_moc}]]"
         }
 
     def rollback_note(self, filename: str) -> bool:
-        """생성된 노트를 삭제(원복)합니다."""
-        target_path = VAULT_DIR / filename
-        if target_path.exists():
-            target_path.unlink()
-            return True
+        """생성된 노트를 영구 삭제하지 않고 _archive/rolled_back/으로 안전 격리 보존합니다."""
+        try:
+            target_path = vault_io.resolve_in_vault(filename)
+            if target_path.exists():
+                rollback_dir = vault_io.VAULT_DIR / "_archive" / "rolled_back"
+                rollback_dir.mkdir(parents=True, exist_ok=True)
+                dest = rollback_dir / target_path.name
+                os.replace(target_path, dest)
+                logger.info(f"[agent_core] 롤백 노트를 _archive/rolled_back으로 안전 격리 보존: {target_path.name}")
+                return True
+        except Exception as e:
+            logger.error(f"[agent_core] 롤백 처리 실패: {e}")
         return False
 
     def perform_executive_review(self, title: str, content: str, source_date: str) -> Dict[str, Any]:

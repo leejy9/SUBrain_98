@@ -4,9 +4,12 @@ from typing import List, Dict, Any, Optional
 from google import genai
 from google.genai import types
 
+import logging
 from config import GEMINI_API_KEY
 from models import CognitivePrimitive, SemanticLink, RejectedLink, CriticEvaluation
 from vault_indexer import VaultIndexer
+
+logger = logging.getLogger(__name__)
 
 class CriticValidator:
     """k-hop Ego Subgraph 맥락을 기반으로 5대 인지 원형 적합성 및 85점 임계치를 검증하는 비판관"""
@@ -15,6 +18,7 @@ class CriticValidator:
         self.client = genai.Client(api_key=GEMINI_API_KEY)
         self.indexer = indexer
         self.model_name = "gemini-3.1-flash-lite"
+        self.enabled = True
 
     def evaluate_candidates(
         self,
@@ -26,6 +30,15 @@ class CriticValidator:
         """
         제안된 후보 노드들에 대해 상세 본문 및 1-hop 이웃 노드 맥락을 조회하여 비판적 검증을 수행합니다.
         """
+        if not self.enabled:
+            logger.info("[CriticValidator] 비판관 검증 비활성화 (무료 쿼터 절약 모드). 상위 MOC 격리 매핑으로 즉각 반환합니다.")
+            return CriticEvaluation(
+                passed_links=[],
+                rejected_links=[],
+                fallback_to_moc=True,
+                evaluation_log="비판관 검증 비활성화 모드 (Gemini Quota Saver ON) - 상위 MOC 안전 매핑"
+            )
+
         if not proposed_candidates:
             return CriticEvaluation(
                 passed_links=[],

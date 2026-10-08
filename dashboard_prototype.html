@@ -7,14 +7,16 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,600;1,6..72,400&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,600;1,6..72,400&family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=Noto+Sans+KR:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/sun-typeface/suit@2/fonts/static/woff2/SUIT.css" />
   <script>
     tailwind.config = {
       darkMode: 'class',
       theme: {
         extend: {
           fontFamily: {
-            sans: ['Inter', 'sans-serif'],
+            sans: ['var(--app-font-family)', 'Pretendard', '-apple-system', 'BlinkMacSystemFont', 'system-ui', 'Roboto', 'sans-serif'],
             serif: ['Newsreader', 'serif'],
             mono: ['JetBrains Mono', 'monospace'],
           },
@@ -37,6 +39,26 @@
   </script>
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
   <style>
+    @font-face {
+      font-family: 'LINE Seed KR';
+      src: url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_11-01@1.0/LINESeedKR-Rg.woff2') format('woff2');
+      font-weight: 400;
+      font-style: normal;
+      font-display: swap;
+    }
+    @font-face {
+      font-family: 'LINE Seed KR';
+      src: url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_11-01@1.0/LINESeedKR-Bd.woff2') format('woff2');
+      font-weight: 700;
+      font-style: normal;
+      font-display: swap;
+    }
+    :root {
+      --app-font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
+    body, button, input, select, textarea {
+      font-family: var(--app-font-family) !important;
+    }
     ::-webkit-scrollbar { width: 5px; height: 5px; }
     ::-webkit-scrollbar-track { background: transparent; }
     ::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 9999px; }
@@ -323,13 +345,6 @@
     html.dark button.bg-neutral-900:hover, html.dark button.bg-zinc-900:hover {
       background-color: #e4e4e7 !important;
     }
-    html.dark #btn-db-commit {
-      background-color: #f4f4f5 !important;
-      color: #18181b !important;
-    }
-    html.dark #btn-db-commit svg {
-      color: #d97706 !important;
-    }
 
     /* Inspector & Drawer */
     html.dark #inspector-panel {
@@ -531,6 +546,17 @@
     </div>
 
     <div class="flex items-center space-x-2.5 flex-shrink-0 whitespace-nowrap">
+      <!-- Critic Quota Toggle Switch -->
+      <div class="flex items-center space-x-2 px-2.5 py-1.5 rounded-lg border border-neutral-200 dark:border-zinc-800 bg-neutral-50/80 dark:bg-zinc-800/80 text-xs flex-shrink-0 shadow-2xs">
+        <span class="text-[11px] font-medium text-neutral-600 dark:text-zinc-300 flex items-center gap-1.5">
+          <span class="w-1.5 h-1.5 rounded-full bg-emerald-500" id="critic-status-dot"></span>
+          <span>Critic 검증</span>
+        </span>
+        <button id="btn-toggle-critic" onclick="toggleCriticValidator()" class="relative inline-flex h-4.5 w-8 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none bg-emerald-500" role="switch" aria-checked="true" title="Gemini API 쿼터 절약을 위한 비판관 On/Off 토글">
+          <span id="critic-toggle-thumb" class="pointer-events-none inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out translate-x-3.5"></span>
+        </button>
+      </div>
+
       <!-- COMPACT SYSTEM STATUS PILL (Progressive Disclosure) -->
       <div class="relative group flex-shrink-0">
         <button id="system-status-pill" class="flex items-center space-x-2 px-2.5 py-1.5 rounded-lg border border-neutral-200 bg-neutral-50/90 hover:bg-neutral-100 hover:border-neutral-300 text-xs transition-all cursor-pointer whitespace-nowrap flex-shrink-0">
@@ -595,6 +621,94 @@
         <span>새 지식 인입 (URL / 파일)</span>
       </button>
 
+      <!-- REAL-TIME FONT SWITCHER DROPDOWN (가독성 폰트 실시간 전환기) -->
+      <div class="relative flex-shrink-0" id="font-switcher-container">
+        <button id="btn-font-switcher" onclick="toggleFontDropdown(event)" title="글씨체 가독성 실시간 변경/비교" class="h-8 px-2.5 rounded-lg border border-neutral-200 dark:border-zinc-700 flex items-center space-x-1.5 text-xs font-medium text-neutral-700 dark:text-zinc-200 hover:bg-neutral-50 dark:hover:bg-zinc-800 transition-colors shadow-2xs">
+          <span class="text-indigo-600 dark:text-indigo-400 font-mono text-[11px] font-bold">Aa</span>
+          <span id="current-font-name" class="font-medium text-[11px]">Pretendard</span>
+          <svg class="w-3 h-3 text-neutral-400 dark:text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+        </button>
+
+        <div id="font-switcher-dropdown" class="hidden absolute right-0 top-full mt-1.5 w-64 bg-white dark:bg-zinc-900 border border-neutral-200 dark:border-zinc-800 rounded-xl shadow-2xl p-1.5 z-50 text-xs backdrop-blur-md space-y-0.5">
+          <div class="px-2.5 py-1 text-[10px] font-semibold text-neutral-400 dark:text-zinc-500 uppercase tracking-wider flex items-center justify-between">
+            <span>가독성 폰트 선택</span>
+            <span class="text-[9px] font-mono opacity-70">실시간 반영</span>
+          </div>
+
+          <!-- Option 1: Pretendard -->
+          <button onclick="setDashboardFont('pretendard')" class="w-full px-2.5 py-1.5 text-left rounded-lg hover:bg-neutral-100 dark:hover:bg-zinc-800 flex items-center justify-between transition-colors font-option" data-font="pretendard" style="font-family: 'Pretendard', sans-serif;">
+            <div>
+              <div class="flex items-center space-x-1.5">
+                <span class="font-semibold text-neutral-900 dark:text-zinc-100 text-xs">Pretendard</span>
+                <span class="px-1 py-0.2 text-[9px] bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 rounded font-medium">추천</span>
+              </div>
+              <span class="text-[10px] text-neutral-500 dark:text-zinc-400 block mt-0.5">Inter+한글 완벽 결합 / 한국 테크 표준</span>
+            </div>
+            <span class="font-check text-indigo-600 dark:text-indigo-400 font-bold text-xs">✓</span>
+          </button>
+
+          <!-- Option 2: LINE Seed KR -->
+          <button onclick="setDashboardFont('lineseed')" class="w-full px-2.5 py-1.5 text-left rounded-lg hover:bg-neutral-100 dark:hover:bg-zinc-800 flex items-center justify-between transition-colors font-option" data-font="lineseed" style="font-family: 'LINE Seed KR', sans-serif;">
+            <div>
+              <div class="flex items-center space-x-1.5">
+                <span class="font-semibold text-neutral-900 dark:text-zinc-100 text-xs">LINE Seed KR</span>
+                <span class="px-1 py-0.2 text-[9px] bg-blue-100 dark:bg-blue-950/60 text-blue-700 dark:text-blue-400 rounded font-medium">선명함</span>
+              </div>
+              <span class="text-[10px] text-neutral-500 dark:text-zinc-400 block mt-0.5">시원한 공간감 / 작은 글씨·뱃지 식별 극대화</span>
+            </div>
+            <span class="font-check text-transparent font-bold text-xs">✓</span>
+          </button>
+
+          <!-- Option 3: IBM Plex Sans KR -->
+          <button onclick="setDashboardFont('ibmplex')" class="w-full px-2.5 py-1.5 text-left rounded-lg hover:bg-neutral-100 dark:hover:bg-zinc-800 flex items-center justify-between transition-colors font-option" data-font="ibmplex" style="font-family: 'IBM Plex Sans KR', sans-serif;">
+            <div>
+              <div class="flex items-center space-x-1.5">
+                <span class="font-semibold text-neutral-900 dark:text-zinc-100 text-xs">IBM Plex Sans KR</span>
+                <span class="px-1 py-0.2 text-[9px] bg-purple-100 dark:bg-purple-950/60 text-purple-700 dark:text-purple-400 rounded font-medium">지식 베이스</span>
+              </div>
+              <span class="text-[10px] text-neutral-500 dark:text-zinc-400 block mt-0.5">옵시디언/위키 감성의 정갈한 테크 서체</span>
+            </div>
+            <span class="font-check text-transparent font-bold text-xs">✓</span>
+          </button>
+
+          <!-- Option 4: SUIT -->
+          <button onclick="setDashboardFont('suit')" class="w-full px-2.5 py-1.5 text-left rounded-lg hover:bg-neutral-100 dark:hover:bg-zinc-800 flex items-center justify-between transition-colors font-option" data-font="suit" style="font-family: 'SUIT', sans-serif;">
+            <div>
+              <div class="flex items-center space-x-1.5">
+                <span class="font-semibold text-neutral-900 dark:text-zinc-100 text-xs">SUIT (수트)</span>
+                <span class="px-1 py-0.2 text-[9px] bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-400 rounded font-medium">고밀도</span>
+              </div>
+              <span class="text-[10px] text-neutral-500 dark:text-zinc-400 block mt-0.5">슬림한 자폭 / 위젯·메타데이터 밀도 최적화</span>
+            </div>
+            <span class="font-check text-transparent font-bold text-xs">✓</span>
+          </button>
+
+          <!-- Option 5: Noto Sans KR -->
+          <button onclick="setDashboardFont('notosans')" class="w-full px-2.5 py-1.5 text-left rounded-lg hover:bg-neutral-100 dark:hover:bg-zinc-800 flex items-center justify-between transition-colors font-option" data-font="notosans" style="font-family: 'Noto Sans KR', sans-serif;">
+            <div>
+              <div class="flex items-center space-x-1.5">
+                <span class="font-semibold text-neutral-900 dark:text-zinc-100 text-xs">Noto Sans KR</span>
+                <span class="px-1 py-0.2 text-[9px] bg-neutral-100 dark:bg-zinc-800 text-neutral-600 dark:text-zinc-400 rounded font-medium">표준</span>
+              </div>
+              <span class="text-[10px] text-neutral-500 dark:text-zinc-400 block mt-0.5">구글·어도비 표준 본고딕</span>
+            </div>
+            <span class="font-check text-transparent font-bold text-xs">✓</span>
+          </button>
+
+          <!-- Option 6: Inter (기존) -->
+          <button onclick="setDashboardFont('inter')" class="w-full px-2.5 py-1.5 text-left rounded-lg hover:bg-neutral-100 dark:hover:bg-zinc-800 flex items-center justify-between transition-colors font-option" data-font="inter" style="font-family: 'Inter', sans-serif;">
+            <div>
+              <div class="flex items-center space-x-1.5">
+                <span class="font-semibold text-neutral-700 dark:text-zinc-300 text-xs">Inter (기존 설정)</span>
+                <span class="px-1 py-0.2 text-[9px] bg-neutral-100 dark:bg-zinc-800 text-neutral-500 dark:text-zinc-400 rounded">이전</span>
+              </div>
+              <span class="text-[10px] text-neutral-400 dark:text-zinc-500 block mt-0.5">영문 전용 + OS 기본 산세리프 폴백</span>
+            </div>
+            <span class="font-check text-transparent font-bold text-xs">✓</span>
+          </button>
+        </div>
+      </div>
+
       <!-- DARK MODE TOGGLE & SETTINGS BUTTON -->
       <button id="btn-theme-toggle" onclick="toggleDarkMode()" title="다크 모드 / 라이트 모드 전환" class="w-8 h-8 rounded-lg border border-neutral-200 dark:border-zinc-700 flex items-center justify-center text-neutral-500 hover:text-neutral-900 dark:text-zinc-400 dark:hover:text-zinc-100 hover:bg-neutral-50 dark:hover:bg-zinc-800 transition-colors">
         <svg id="theme-icon-moon" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path></svg>
@@ -653,44 +767,119 @@
         </button>
 
         <div class="flex-1 overflow-y-auto">
-          <!-- Top Target Status Bar (Anti-Collapsing, Whitespace-Nowrap) -->
-          <div class="px-5 py-2.5 border-b border-neutral-200/80 dark:border-zinc-800 bg-white/95 dark:bg-zinc-950/95 backdrop-blur flex items-center justify-between sticky top-0 z-10 min-w-0 flex-nowrap">
-            <div class="flex items-center space-x-2 text-xs min-w-0 flex-1 mr-3 overflow-hidden">
-              <span class="px-1.5 py-0.5 font-mono font-medium bg-neutral-100 dark:bg-zinc-800 text-neutral-700 dark:text-zinc-300 rounded border border-neutral-200 dark:border-zinc-700 text-[10px] flex-shrink-0 whitespace-nowrap">TARGET</span>
-              <span id="doc-meta-id" class="font-mono text-neutral-500 dark:text-zinc-400 text-[11px] truncate flex-shrink min-w-0">#DOC-0928-232707 // Telegram Mobile Ingest</span>
-              <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 flex-shrink-0"></span>
-              <span id="doc-stage-badge" class="text-neutral-700 dark:text-zinc-300 font-medium text-[11px] truncate hidden md:inline">검토 대기 및 옵시디언 뷰어</span>
-            </div>
-            <div class="flex items-center space-x-1.5 flex-shrink-0 whitespace-nowrap">
-              <!-- B안: Compare Toggle Button (원문 대조 비교 모드) -->
-              <button id="btn-toggle-compare" onclick="toggleCompareMode()" title="원문 대조 비교 모드 (단축키: C)" class="px-2.5 py-1 text-xs font-medium border border-neutral-200 dark:border-zinc-700 text-neutral-700 dark:text-zinc-300 rounded-lg hover:bg-neutral-100 dark:hover:bg-zinc-800 transition-all flex items-center space-x-1 flex-shrink-0 whitespace-nowrap">
-                <span>⇄ Compare</span>
-              </button>
+          <!-- Top Target Status Bar (Top-Left File Menu + Target Info + Clean Minimal Status) -->
+          <div class="px-4 py-2 border-b border-neutral-200/80 dark:border-zinc-800 bg-white/95 dark:bg-zinc-950/95 backdrop-blur flex items-center justify-between sticky top-0 z-30 min-w-0 flex-nowrap select-none">
+            <div class="flex items-center space-x-2.5 text-xs min-w-0 flex-1 mr-3">
+              <!-- FILE MENU DROPDOWN (일반적인 데스크톱/에디터 프로그램 스타일) -->
+              <div class="relative flex-shrink-0 z-40" id="file-menu-container">
+                <button id="btn-file-menu" onclick="toggleFileMenu(event)" title="파일 및 보기 메뉴" class="px-2.5 py-1 text-xs font-semibold rounded-md border border-neutral-200 dark:border-zinc-700/80 hover:bg-neutral-100 dark:hover:bg-zinc-800 text-neutral-800 dark:text-zinc-200 transition-colors flex items-center space-x-1.5 cursor-pointer">
+                  <span>File</span>
+                  <svg id="file-menu-chevron" class="w-3 h-3 text-neutral-400 dark:text-zinc-400 transition-transform duration-150" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                </button>
 
-              <!-- View Mode Toggle (Preview / Edit) -->
-              <div class="flex items-center bg-neutral-100 dark:bg-zinc-800 p-0.5 rounded-lg border border-neutral-200 dark:border-zinc-700 mr-1 flex-shrink-0 whitespace-nowrap">
-                <button id="btn-view-preview" onclick="setDocViewMode('preview')" class="px-2.5 py-1 text-xs font-medium rounded-md bg-white dark:bg-zinc-700 text-neutral-900 dark:text-zinc-100 shadow-xs transition-all flex items-center space-x-1 flex-shrink-0 whitespace-nowrap">
-                  <span>👁️ Preview</span>
-                </button>
-                <button id="btn-view-edit" onclick="setDocViewMode('edit')" class="px-2.5 py-1 text-xs font-medium rounded-md text-neutral-600 dark:text-zinc-400 hover:text-neutral-900 dark:hover:text-zinc-100 transition-all flex items-center space-x-1 flex-shrink-0 whitespace-nowrap">
-                  <span>✏️ Edit</span>
-                </button>
+                <!-- Dropdown Menu Popover -->
+                <div id="file-menu-dropdown" class="hidden absolute left-0 top-full mt-1.5 w-64 bg-white dark:bg-zinc-900 border border-neutral-200 dark:border-zinc-800 rounded-xl shadow-2xl py-1.5 z-50 text-xs backdrop-blur-md">
+                  <!-- Save to Vault -->
+                  <button id="btn-db-commit" onclick="commitActiveCard(); closeFileMenu();" class="w-full px-3 py-2 text-left hover:bg-neutral-100 dark:hover:bg-zinc-800/80 text-neutral-800 dark:text-zinc-200 flex items-center justify-between transition-colors">
+                    <div class="flex items-center space-x-2.5">
+                      <span class="text-amber-500 font-bold text-sm">⚡</span>
+                      <span id="btn-db-commit-text" class="font-medium">Save to Vault</span>
+                    </div>
+                    <kbd class="px-1.5 py-0.5 text-[10px] font-mono text-neutral-400 dark:text-zinc-500 bg-neutral-50 dark:bg-zinc-800 rounded border border-neutral-200 dark:border-zinc-700">⌘S</kbd>
+                  </button>
+
+                  <!-- Discard to Tombstone -->
+                  <button id="btn-discard-card" onclick="openDiscardModal(currentCardIndex); closeFileMenu();" class="w-full px-3 py-2 text-left hover:bg-rose-50 dark:hover:bg-rose-950/30 text-neutral-700 hover:text-rose-600 dark:text-zinc-300 dark:hover:text-rose-400 flex items-center justify-between transition-colors">
+                    <div class="flex items-center space-x-2.5">
+                      <span class="text-sm">🪦</span>
+                      <span class="font-medium">Discard to Tombstone</span>
+                    </div>
+                    <span class="text-[10px] text-neutral-400 dark:text-zinc-500">폐기</span>
+                  </button>
+
+                  <!-- Close Card -->
+                  <button id="btn-close-card" onclick="closeActiveCard(); closeFileMenu();" class="w-full px-3 py-2 text-left hover:bg-neutral-100 dark:hover:bg-zinc-800/80 text-neutral-700 dark:text-zinc-300 flex items-center justify-between transition-colors">
+                    <div class="flex items-center space-x-2.5">
+                      <svg class="w-3.5 h-3.5 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                      <span class="font-medium">Close Card</span>
+                    </div>
+                    <kbd class="px-1.5 py-0.5 text-[10px] font-mono text-neutral-400 dark:text-zinc-500 bg-neutral-50 dark:bg-zinc-800 rounded border border-neutral-200 dark:border-zinc-700">Esc</kbd>
+                  </button>
+
+                  <!-- Divider -->
+                  <div class="border-t border-neutral-100 dark:border-zinc-800 my-1"></div>
+
+                  <!-- Section: View & Compare -->
+                  <div class="px-3 py-1 text-[10px] font-semibold tracking-wider text-neutral-400 dark:text-zinc-500 uppercase">View & Compare</div>
+
+                  <div id="view-mode-toggle-group" class="space-y-0.5">
+                    <!-- Preview -->
+                    <button id="btn-view-preview" onclick="setDocViewMode('preview'); closeFileMenu();" class="w-full px-3 py-1.5 text-left bg-neutral-100 dark:bg-zinc-800 text-neutral-900 dark:text-zinc-100 flex items-center justify-between transition-colors font-semibold">
+                      <div class="flex items-center space-x-2">
+                        <span id="check-view-preview" class="w-3.5 text-indigo-600 dark:text-indigo-400 font-bold">✓</span>
+                        <span>👁️ Preview Mode</span>
+                      </div>
+                      <span class="text-[10px] text-neutral-400 dark:text-zinc-500">미리보기</span>
+                    </button>
+
+                    <!-- Edit -->
+                    <button id="btn-view-edit" onclick="setDocViewMode('edit'); closeFileMenu();" class="w-full px-3 py-1.5 text-left hover:bg-neutral-100 dark:hover:bg-zinc-800/80 text-neutral-700 dark:text-zinc-300 flex items-center justify-between transition-colors">
+                      <div class="flex items-center space-x-2">
+                        <span id="check-view-edit" class="w-3.5 text-transparent font-bold">✓</span>
+                        <span>✏️ Markdown Edit</span>
+                      </div>
+                      <span class="text-[10px] text-neutral-400 dark:text-zinc-500">편집</span>
+                    </button>
+                  </div>
+
+                  <!-- Compare -->
+                  <button id="btn-toggle-compare" onclick="toggleCompareMode(); closeFileMenu();" class="w-full px-3 py-1.5 text-left hover:bg-neutral-100 dark:hover:bg-zinc-800/80 text-neutral-800 dark:text-zinc-200 flex items-center justify-between transition-colors">
+                    <div class="flex items-center space-x-2">
+                      <span id="check-view-compare" class="w-3.5 text-transparent font-bold">✓</span>
+                      <span id="btn-compare-text">⇄ Compare Original</span>
+                    </div>
+                    <kbd class="px-1.5 py-0.5 text-[10px] font-mono text-neutral-400 dark:text-zinc-500 bg-neutral-50 dark:bg-zinc-800 rounded border border-neutral-200 dark:border-zinc-700">C</kbd>
+                  </button>
+                </div>
               </div>
 
-              <!-- Deep Dive Button -->
-              <button onclick="openExecutiveDrawer(currentCardIndex)" title="심층 분석 드로어 (단축키: D)" class="px-2.5 py-1 text-xs font-medium bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-200 border border-amber-200 dark:border-amber-800 rounded-lg hover:bg-amber-100 dark:hover:bg-amber-900/50 transition-colors flex items-center space-x-1 flex-shrink-0 whitespace-nowrap">
-                <span>⚡ Deep Dive</span>
-              </button>
+              <!-- Subtle Divider -->
+              <div class="h-4 w-px bg-neutral-200 dark:bg-zinc-800 flex-shrink-0"></div>
 
-              <!-- Save / Commit Button -->
-              <button id="btn-db-commit" onclick="commitActiveCard()" class="px-3 py-1 text-xs font-medium bg-neutral-900 text-white rounded-lg hover:bg-neutral-800 transition-colors flex items-center space-x-1.5 shadow-sm flex-shrink-0 whitespace-nowrap">
-                <svg class="w-3.5 h-3.5 text-amber-400 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z" clip-rule="evenodd"></path></svg>
-                <span id="btn-db-commit-text" class="whitespace-nowrap">Save</span>
-              </button>
+              <!-- Target info -->
+              <div class="flex items-center space-x-2 min-w-0 flex-1 overflow-hidden">
+                <span class="px-1.5 py-0.5 font-mono font-medium bg-neutral-100 dark:bg-zinc-800 text-neutral-700 dark:text-zinc-300 rounded border border-neutral-200 dark:border-zinc-700 text-[10px] flex-shrink-0 whitespace-nowrap">TARGET</span>
+                <span id="doc-meta-id" class="font-mono text-neutral-500 dark:text-zinc-400 text-[11px] truncate flex-shrink min-w-0">대기열에서 카드를 선택하세요</span>
+                <span class="w-1.5 h-1.5 rounded-full bg-neutral-400 flex-shrink-0"></span>
+                <span id="doc-stage-badge" class="text-neutral-500 dark:text-zinc-400 font-medium text-[11px] truncate hidden md:inline">카드 미선택</span>
+              </div>
+            </div>
 
-              <!-- Discard Button -->
-              <button onclick="openDiscardModal(currentCardIndex)" title="묘비(Tombstone)로 폐기" class="px-2 py-1 text-xs text-neutral-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/50 rounded-lg border border-neutral-200 dark:border-zinc-700 hover:border-rose-200 transition-colors flex items-center space-x-0.5 flex-shrink-0">
-                <span>🪦 Discard</span>
+            <!-- Right minimal status pill (Hidden when no card is selected) -->
+            <div class="flex items-center space-x-2 flex-shrink-0 whitespace-nowrap">
+              <span id="doc-save-status-badge" class="hidden inline-flex items-center space-x-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border border-emerald-200/60 dark:border-emerald-800/60">
+                <span id="doc-save-status-dot" class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                <span id="doc-save-status-text">Saved</span>
+              </span>
+            </div>
+          </div>
+
+          <!-- Empty / Initial State (When no card is selected) -->
+          <div id="card-closed-state" class="max-w-xl mx-auto py-28 px-6 text-center space-y-4 select-none">
+            <div class="w-16 h-16 rounded-2xl bg-neutral-100 dark:bg-zinc-800 border border-neutral-200 dark:border-zinc-700 flex items-center justify-center text-3xl mx-auto text-neutral-400 shadow-xs">
+              🗂️
+            </div>
+            <div>
+              <h3 class="text-base font-semibold text-neutral-900 dark:text-zinc-100 mb-1.5">선택된 카드가 없습니다</h3>
+              <p class="text-xs text-neutral-500 dark:text-zinc-400 leading-relaxed max-w-sm mx-auto">
+                좌측 대기열에서 검토할 카드를 클릭하세요.<br>
+                카드를 선택하면 본문 내용과 AI 코파일럿 대화창이 함께 열립니다.
+              </p>
+            </div>
+            <div class="pt-2 flex items-center justify-center gap-2">
+              <button onclick="selectCard(0)" class="px-4 py-2 bg-neutral-900 hover:bg-neutral-800 dark:bg-zinc-100 dark:hover:bg-white text-white dark:text-zinc-900 text-xs font-medium rounded-xl shadow-xs transition-all flex items-center space-x-1.5 cursor-pointer">
+                <span>첫 번째 카드 열기</span>
+                <kbd class="px-1.5 py-0.2 font-mono text-[10px] bg-neutral-800 dark:bg-zinc-200 text-neutral-200 dark:text-zinc-800 rounded">↵</kbd>
               </button>
             </div>
           </div>
@@ -723,7 +912,7 @@
           </div>
 
           <!-- Document Reading Canvas: Single View (Default) -->
-          <div id="single-view-container" class="max-w-3xl w-full mx-auto px-8 py-7 space-y-6">
+          <div id="single-view-container" class="hidden max-w-3xl w-full mx-auto px-8 py-7 space-y-6">
             <!-- File Path & Header -->
             <div>
               <div class="flex items-center space-x-2 text-[11px] font-mono text-neutral-400 mb-1.5">
@@ -742,6 +931,58 @@
             <!-- Triage Structured Digestion Card (Single View) -->
             <div id="triage-digestion-card" class="rounded-2xl border border-indigo-100 dark:border-zinc-800 bg-gradient-to-br from-indigo-50/40 via-white to-purple-50/20 dark:from-zinc-900/90 dark:via-zinc-900 dark:to-zinc-950 p-5 shadow-xs space-y-4">
               <!-- Dynamically populated by renderTriageDigestion() -->
+            </div>
+
+            <!-- PROPOSAL DIFF BANNER & CONTAINER -->
+            <div id="doc-proposal-banner" class="hidden rounded-2xl border border-amber-200 dark:border-amber-800/80 bg-gradient-to-r from-amber-50/90 via-orange-50/50 to-amber-50/90 dark:from-amber-950/40 dark:via-zinc-900 dark:to-amber-950/40 p-4 shadow-sm space-y-3">
+              <div class="flex items-center justify-between">
+                <div class="flex items-center space-x-2 text-xs font-semibold text-amber-800 dark:text-amber-300">
+                  <span class="w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse"></span>
+                  <span class="text-sm font-bold">AI 본문 수정 제안이 대기 중입니다</span>
+                  <span class="text-[10px] font-mono px-2 py-0.5 rounded bg-amber-100 dark:bg-amber-900/60 text-amber-700 dark:text-amber-300 border border-amber-300/50">Diff 검토 권장</span>
+                </div>
+                <div class="flex items-center space-x-2">
+                  <button onclick="applyCopilotProposal()" class="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-semibold shadow-xs transition-colors flex items-center space-x-1.5 cursor-pointer">
+                    <span>✓</span>
+                    <span>제안 승인 및 볼트 영구 저장</span>
+                  </button>
+                  <button onclick="dismissCopilotProposal()" class="px-3 py-1.5 bg-white dark:bg-zinc-800 hover:bg-neutral-100 dark:hover:bg-zinc-700 text-neutral-600 dark:text-zinc-300 border border-neutral-300 dark:border-zinc-700 rounded-xl text-xs font-medium transition-colors cursor-pointer">
+                    <span>✕ 제안 취소</span>
+                  </button>
+                </div>
+              </div>
+
+              <!-- Fact Guard Warning Box -->
+              <div id="doc-proposal-factguard-box" class="hidden p-2.5 rounded-xl bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-900/60 text-xs space-y-1">
+                <div class="flex items-center space-x-1.5 text-rose-700 dark:text-rose-400 font-semibold text-[11px]">
+                  <span>⚠️ Fact Guard 경고:</span>
+                  <span id="doc-factguard-msg">원문에 명시되지 않은 수치가 포함되어 있습니다.</span>
+                </div>
+                <div id="doc-factguard-chips" class="flex flex-wrap gap-1.5 pt-0.5"></div>
+              </div>
+
+              <div class="flex items-center justify-between text-xs pt-1 border-t border-amber-200/60 dark:border-amber-900/40">
+                <span class="text-[11px] text-amber-700 dark:text-amber-400">아래 캔버스에서 변경 전(빨간 줄)과 변경 후(초록 줄)를 직접 확인하세요.</span>
+                <div class="flex items-center space-x-2 text-[11px]">
+                  <button id="btn-toggle-diff-preview" onclick="toggleProposalDiffDisplay(false)" class="text-neutral-500 hover:underline cursor-pointer">원본 미리보기</button>
+                  <span>·</span>
+                  <button id="btn-toggle-diff-diff" onclick="toggleProposalDiffDisplay(true)" class="font-bold text-amber-800 dark:text-amber-300 underline cursor-pointer">Diff 비교 모드</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- MODE 4: PROPOSAL DIFF VIEWER -->
+            <div id="doc-diff-container" class="hidden space-y-3 pb-8">
+              <div class="flex items-center justify-between p-2.5 rounded-xl bg-neutral-100/90 dark:bg-zinc-800/90 border border-neutral-200 dark:border-zinc-700 text-xs font-mono">
+                <div class="flex items-center space-x-3">
+                  <span class="font-bold text-neutral-800 dark:text-zinc-200">Diff 변경 사항 비교</span>
+                  <span id="diff-stats-badge" class="text-[11px] px-2 py-0.5 rounded bg-white dark:bg-zinc-900 border border-neutral-200 dark:border-zinc-700"></span>
+                </div>
+                <span class="text-[10px] text-neutral-400">빨간색: 삭제 / 초록색: 추가</span>
+              </div>
+              <div id="doc-diff-lines-wrapper" class="w-full p-4 font-mono text-xs leading-relaxed bg-white dark:bg-zinc-900 border border-neutral-200 dark:border-zinc-800 rounded-xl shadow-xs overflow-x-auto space-y-0.5">
+                <!-- Dynamically populated diff lines -->
+              </div>
             </div>
 
             <!-- MODE 1: PREVIEW (Clean Obsidian Reader) -->
@@ -792,108 +1033,146 @@
           </div>
         </div>
 
-        <!-- Minimalist Copilot Chat Bar (Zero Visual Clutter) -->
-        <div class="border-t border-neutral-200 dark:border-zinc-800 bg-white/95 dark:bg-zinc-950/95 backdrop-blur px-8 py-3 flex-shrink-0 z-10">
-          <div class="max-w-3xl mx-auto">
-            <div class="relative flex items-center space-x-2 bg-neutral-50 dark:bg-zinc-900 border border-neutral-200 dark:border-zinc-700 rounded-xl px-3 py-2 focus-within:border-neutral-400 dark:focus-within:border-zinc-500 focus-within:bg-white dark:focus-within:bg-zinc-800/90 transition-all shadow-xs">
-              
-              <!-- Quick Skill Trigger Menu Button (Toggleable Popover) -->
-              <div class="relative">
-                <button type="button" onclick="toggleSkillMenu(event)" id="btn-skill-menu" title="빠른 지시 / 스킬 메뉴 (클릭하여 선택)" class="w-6 h-6 rounded-md hover:bg-neutral-200 dark:hover:bg-zinc-700 flex items-center justify-center text-neutral-400 hover:text-neutral-700 dark:hover:text-zinc-200 transition-colors">
-                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
-                </button>
+        <!-- Note: Copilot is no longer docked here at the bottom. It is now the Right Column (Antigravity CLI / IDE Layout) -->
+      </section>
 
-                <!-- Skill Dropdown Popover (Hidden by default) -->
-                <div id="copilot-skill-dropdown" class="hidden absolute bottom-full mb-2 left-0 w-64 bg-white dark:bg-zinc-900 border border-neutral-200 dark:border-zinc-700 rounded-xl shadow-xl p-1.5 z-50 text-xs">
-                  <div class="px-2 py-1 text-[10px] font-semibold text-neutral-400 dark:text-zinc-400 uppercase tracking-wider">추천 분석 스킬 / 빠른 지시</div>
-                  <div id="copilot-skill-items" class="space-y-0.5">
-                    <!-- Populated dynamically -->
-                  </div>
-                </div>
-              </div>
+      <!-- RESIZER: RIGHT COPILOT & INSPECTION PANEL -->
+      <div id="resizer-inspector" class="hidden w-1.5 cursor-col-resize hover:bg-indigo-500/60 dark:hover:bg-indigo-400/60 bg-neutral-200 dark:bg-zinc-800 transition-all flex-shrink-0 select-none z-20" title="드래그하여 AI 코파일럿 패널 너비 조절"></div>
 
-              <input type="text" id="copilot-input" placeholder="수정 지시 또는 질문을 입력하세요... (⌘K)" class="flex-1 bg-transparent text-xs focus:outline-none text-neutral-900 dark:text-zinc-100 placeholder-neutral-400">
-              
-              <span id="copilot-card-id" class="hidden sm:inline-block font-mono text-[10px] text-neutral-400 dark:text-zinc-500 px-1.5 py-0.5 bg-neutral-100 dark:bg-zinc-800 rounded"></span>
-
-              <button onclick="sendCopilotMessage()" class="px-3 py-1 bg-neutral-900 hover:bg-neutral-800 dark:bg-zinc-100 dark:hover:bg-white dark:text-zinc-900 text-white rounded-lg text-xs font-medium transition-colors flex items-center space-x-1 shadow-xs">
-                <span>실행</span>
-                <span class="text-[10px] opacity-60">↑</span>
+      <!-- COLUMN 3: RIGHT AI COPILOT & INSPECTION PANEL (Antigravity CLI / IDE Style Split Pane) -->
+      <aside id="inspector-panel" class="hidden w-[460px] min-w-[340px] max-w-[720px] bg-white dark:bg-zinc-950 border-l border-neutral-200/90 dark:border-zinc-800 flex flex-col flex-shrink-0 z-20 select-none transition-all duration-150">
+        
+        <!-- Header Bar (Antigravity Session Header) -->
+        <div class="px-4 py-2.5 border-b border-neutral-200/80 dark:border-zinc-800/80 flex items-center justify-between bg-neutral-50/70 dark:bg-zinc-900/60 select-none flex-shrink-0">
+          <div class="flex items-center space-x-2.5 min-w-0">
+            <span class="w-2 h-2 rounded-full bg-emerald-500" id="copilot-status-indicator"></span>
+            
+            <!-- Tab Switcher: 💬 대화 vs 📋 검증 -->
+            <div class="flex items-center bg-neutral-200/60 dark:bg-zinc-800 p-0.5 rounded-lg text-xs">
+              <button id="tab-btn-copilot-chat" onclick="switchCopilotTab('chat')" class="px-2.5 py-1 rounded-md font-semibold bg-white dark:bg-zinc-700 text-neutral-900 dark:text-zinc-100 shadow-2xs transition-all flex items-center gap-1.5 cursor-pointer">
+                <span>💬 대화</span>
+                <span id="copilot-chat-count-badge" class="px-1.5 py-0.2 text-[10px] font-mono rounded bg-neutral-100 dark:bg-zinc-800 text-neutral-600 dark:text-zinc-400 font-normal">0턴</span>
+              </button>
+              <button id="tab-btn-copilot-inspector" onclick="switchCopilotTab('inspector')" class="px-2.5 py-1 rounded-md text-neutral-600 dark:text-zinc-400 hover:text-neutral-900 dark:hover:text-zinc-200 transition-all flex items-center gap-1 cursor-pointer">
+                <span>📋 검증</span>
+                <span id="inspector-tab-score-pill" class="text-[10px] font-mono text-emerald-600 dark:text-emerald-400 font-bold">100%</span>
               </button>
             </div>
           </div>
-        </div>
-      </section>
 
-      <!-- RESIZER: INSPECTOR PANEL -->
-      <div id="resizer-inspector" class="w-1.5 cursor-col-resize hover:bg-indigo-500/60 dark:hover:bg-indigo-400/60 bg-neutral-200 dark:bg-zinc-800 transition-all flex-shrink-0 select-none z-20" title="드래그하여 검증 패널 너비 조절"></div>
-
-      <!-- COLUMN 3: RIGHT INSPECTION & REASONING PANEL ("저 단계들을 한쪽으로 정리") -->
-      <aside id="inspector-panel" class="w-96 bg-neutral-50/70 border-l border-neutral-200 overflow-y-auto flex flex-col flex-shrink-0 transition-all duration-300">
-        <!-- Inspector Header -->
-        <div class="p-3.5 border-b border-neutral-200 bg-white flex items-center justify-between flex-shrink-0 sticky top-0 z-10">
-          <div class="flex items-center space-x-2">
-            <span class="text-xs font-semibold text-neutral-800 tracking-wide uppercase flex items-center gap-1.5">
-              <span class="text-neutral-800">✦</span> 품질 검증 및 추론 단계
-            </span>
-          </div>
-          <div class="flex items-center space-x-2">
-            <span id="inspector-score-pill" class="text-xs font-mono font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">100.0% PASS</span>
-            <button onclick="toggleInspector()" title="패널 접기" class="p-1 rounded text-neutral-400 hover:text-neutral-700 hover:bg-neutral-100 transition-colors">
-              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+          <div class="flex items-center space-x-1 flex-shrink-0">
+            <!-- Clear Chat button -->
+            <button type="button" onclick="clearActiveCardChat()" title="이 카드의 대화 기록 초기화" class="p-1.5 text-neutral-400 hover:text-neutral-700 dark:hover:text-zinc-200 rounded-lg hover:bg-neutral-100 dark:hover:bg-zinc-800 text-xs transition-colors cursor-pointer" id="btn-clear-chat">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+            </button>
+            <!-- Collapse Panel button -->
+            <button type="button" onclick="toggleInspector()" title="패널 접기" class="p-1.5 text-neutral-400 hover:text-neutral-700 dark:hover:text-zinc-200 rounded-lg hover:bg-neutral-100 dark:hover:bg-zinc-800 text-xs transition-colors cursor-pointer">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
             </button>
           </div>
         </div>
 
-        <div class="p-4 space-y-4 flex-1 overflow-y-auto">
-          <!-- STEP 1: WARNING & AUTO-FIX (If warning exists) -->
-          <div id="inspector-warning-box">
-            <!-- Dynamically populated: Amber warning card or Emerald all-passed card -->
+        <!-- TAB 1: COPILOT CONVERSATION VIEW (Antigravity CLI/IDE Style) -->
+        <div id="view-copilot-chat" class="flex-1 flex flex-col overflow-hidden min-h-0 bg-neutral-50/30 dark:bg-zinc-950/30">
+          
+          <!-- Messages Container -->
+          <div id="copilot-messages-container" class="flex-1 overflow-y-auto px-4 py-4 space-y-4 text-xs select-text">
+            <!-- Dynamically populated by renderCardChatHistory() -->
           </div>
 
-          <!-- STEP 2: INTEGRITY CHECKLIST -->
-          <div class="p-3.5 rounded-xl border border-neutral-200 bg-white space-y-2.5 shadow-sm">
+          <!-- Bottom Input Box Area (Exact Antigravity IDE UI) -->
+          <div class="p-3 bg-white dark:bg-zinc-950 border-t border-neutral-200/80 dark:border-zinc-800/80 flex-shrink-0">
+            
+            <!-- Vault File Status Pill (Just like 0 Files With Changes in Antigravity) -->
+            <div class="mb-2 px-2.5 py-1 rounded-lg bg-neutral-100/80 dark:bg-zinc-900 border border-neutral-200/60 dark:border-zinc-800 flex items-center justify-between text-[11px] text-neutral-600 dark:text-zinc-400">
+              <div class="flex items-center space-x-1.5 min-w-0">
+                <span class="text-amber-500 font-bold">📂</span>
+                <span id="copilot-vault-path-text" class="font-mono text-[10px] truncate" title="/Users/grasshop/Desktop/구직/경험정리">~/Desktop/구직/경험정리</span>
+              </div>
+              <button onclick="commitActiveCard()" class="px-2 py-0.5 rounded text-[10px] font-medium bg-white dark:bg-zinc-800 hover:bg-neutral-50 dark:hover:bg-zinc-700 text-neutral-800 dark:text-zinc-200 border border-neutral-200 dark:border-zinc-700 transition-colors shadow-2xs flex-shrink-0 cursor-pointer">
+                <span>볼트 저장 ⌘S</span>
+              </button>
+            </div>
+
+            <!-- Main Input Card (Antigravity Card Style) -->
+            <div class="rounded-2xl border border-neutral-300 dark:border-zinc-700 bg-neutral-50 dark:bg-zinc-900 p-2.5 focus-within:border-indigo-500 focus-within:ring-2 focus-within:ring-indigo-500/20 focus-within:bg-white dark:focus-within:bg-zinc-900 transition-all shadow-xs relative">
+              
+              <!-- Quick Skill Menu Popover -->
+              <div id="copilot-skill-dropdown" class="hidden absolute bottom-full mb-2 left-2 w-64 bg-white dark:bg-zinc-900 border border-neutral-200 dark:border-zinc-700 rounded-xl shadow-xl p-1.5 z-50 text-xs">
+                <div class="px-2 py-1 text-[10px] font-semibold text-neutral-400 dark:text-zinc-400 uppercase tracking-wider">추천 지시 / 스킬</div>
+                <div id="copilot-skill-items" class="space-y-0.5"></div>
+              </div>
+
+              <!-- Auto-resizable Textarea -->
+              <textarea id="copilot-input" rows="2" placeholder="Ask anything, @ to mention, / for actions (수정 지시 또는 질문)..." class="w-full bg-transparent text-xs focus:outline-none text-neutral-900 dark:text-zinc-100 placeholder-neutral-400 resize-none leading-relaxed select-text"></textarea>
+
+              <!-- Bottom Action Bar Inside Card -->
+              <div class="mt-1 flex items-center justify-between pt-1 border-t border-neutral-200/50 dark:border-zinc-800/60">
+                <div class="flex items-center space-x-1.5">
+                  <!-- Skill Button (+) -->
+                  <button type="button" onclick="toggleSkillMenu(event)" id="btn-skill-menu" title="스킬 및 빠른 지시 템플릿" class="w-6 h-6 rounded-md hover:bg-neutral-200 dark:hover:bg-zinc-800 text-neutral-500 dark:text-zinc-400 hover:text-neutral-900 dark:hover:text-zinc-100 flex items-center justify-center text-xs transition-colors cursor-pointer">
+                    <span>+</span>
+                  </button>
+                  <!-- Model Chip -->
+                  <div class="px-2 py-0.5 rounded-full border border-neutral-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-[10px] font-medium text-neutral-600 dark:text-zinc-300 flex items-center space-x-1">
+                    <span class="text-indigo-600 dark:text-indigo-400 font-bold">✦</span>
+                    <span>Gemini 3.1 Flash Lite</span>
+                  </div>
+                </div>
+
+                <!-- Send Button -->
+                <button onclick="sendCopilotMessage()" id="btn-copilot-send" class="w-7 h-7 rounded-full bg-neutral-900 dark:bg-zinc-100 text-white dark:text-zinc-900 flex items-center justify-center font-bold text-xs hover:scale-105 transition-all shadow-xs cursor-pointer" title="전송 (Enter)">
+                  <span>↑</span>
+                </button>
+              </div>
+            </div>
+
+            <div class="mt-1.5 flex items-center justify-between text-[10px] text-neutral-400 dark:text-zinc-500 px-1">
+              <span>Enter 전송 · Shift+Enter 줄바꿈 · ⌘K 포커스</span>
+              <span class="font-mono text-[9px]">SUBrain Copilot Agent</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB 2: INSPECTION & REASONING AUDIT VIEW (Existing 4 Steps) -->
+        <div id="view-copilot-inspector" class="hidden flex-1 overflow-y-auto p-4 space-y-4 bg-neutral-50/70 dark:bg-zinc-900/40">
+          <!-- Step 1: Warning & Auto-Fix -->
+          <div id="inspector-warning-box"></div>
+          <!-- Step 2: Checklist -->
+          <div class="p-3.5 rounded-xl border border-neutral-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 space-y-2.5 shadow-sm">
             <div class="flex items-center justify-between">
               <div class="flex items-center space-x-1.5">
-                <svg class="w-3.5 h-3.5 text-neutral-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                <h4 class="text-xs font-semibold text-neutral-800">엔티티 무결성 체크리스트</h4>
+                <svg class="w-3.5 h-3.5 text-neutral-600 dark:text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                <h4 class="text-xs font-semibold text-neutral-800 dark:text-zinc-200">엔티티 무결성 체크리스트</h4>
               </div>
               <span id="inspector-checklist-count" class="text-[10px] font-mono text-neutral-500">4/4 통과</span>
             </div>
-            <div id="inspector-checklist-grid" class="space-y-1.5 text-xs">
-              <!-- Check items populated here -->
-            </div>
+            <div id="inspector-checklist-grid" class="space-y-1.5 text-xs"></div>
           </div>
-
-          <!-- STEP 3: MODEL THINKING PROCESS (CoT) -->
-          <div class="border border-neutral-200 rounded-xl overflow-hidden bg-white shadow-sm">
-            <button onclick="toggleThinking()" class="w-full px-3.5 py-2.5 bg-neutral-50 hover:bg-neutral-100 border-b border-neutral-200/80 flex items-center justify-between text-left transition-colors">
+          <!-- Step 3: Thinking CoT -->
+          <div class="border border-neutral-200 dark:border-zinc-800 rounded-xl overflow-hidden bg-white dark:bg-zinc-900 shadow-sm">
+            <button onclick="toggleThinking()" class="w-full px-3.5 py-2.5 bg-neutral-50 dark:bg-zinc-800 hover:bg-neutral-100 dark:hover:bg-zinc-700/80 border-b border-neutral-200/80 dark:border-zinc-700 flex items-center justify-between text-left transition-colors cursor-pointer">
               <div class="flex items-center space-x-2">
-                <span class="text-neutral-800 text-xs">✦</span>
-                <span class="text-xs font-semibold text-neutral-800 tracking-wide">모델 사고 과정 (Thinking CoT)</span>
+                <span class="text-neutral-800 dark:text-zinc-200 text-xs">✦</span>
+                <span class="text-xs font-semibold text-neutral-800 dark:text-zinc-200 tracking-wide">모델 사고 과정 (Thinking CoT)</span>
               </div>
               <div class="flex items-center space-x-1 text-[11px] text-neutral-500">
                 <span id="thinking-status-text">접기</span>
                 <svg id="thinking-chevron" class="w-3.5 h-3.5 transform transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
               </div>
             </button>
-            <div id="thinking-content" class="p-3 space-y-2 text-xs font-mono text-neutral-700 bg-white">
-              <!-- Thinking steps inserted here -->
-            </div>
+            <div id="thinking-content" class="p-3 space-y-2 text-xs font-mono text-neutral-700 dark:text-zinc-300 bg-white dark:bg-zinc-900"></div>
           </div>
-
-          <!-- STEP 4: SEMANTIC LINKS & KNOWLEDGE GRAPH 1-HOP -->
-          <div class="p-3.5 rounded-xl border border-neutral-200 bg-white space-y-2.5 shadow-sm">
+          <!-- Step 4: Semantic links -->
+          <div class="p-3.5 rounded-xl border border-neutral-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 space-y-2.5 shadow-sm">
             <div class="flex items-center justify-between">
               <div class="flex items-center space-x-1.5">
-                <svg class="w-3.5 h-3.5 text-neutral-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"></path></svg>
-                <h4 class="text-xs font-semibold text-neutral-800">1-Hop 인지적 연결망</h4>
+                <svg class="w-3.5 h-3.5 text-neutral-600 dark:text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"></path></svg>
+                <h4 class="text-xs font-semibold text-neutral-800 dark:text-zinc-200">1-Hop 인지적 연결망</h4>
               </div>
-              <button onclick="switchMainTab('graph')" class="text-[10px] text-blue-600 hover:underline font-mono">전체 그래프 &rarr;</button>
+              <button onclick="switchMainTab('graph')" class="text-[10px] text-blue-600 hover:underline font-mono cursor-pointer">전체 그래프 &rarr;</button>
             </div>
-            <div id="inspector-wikilinks-list" class="space-y-1.5">
-              <!-- 1-hop link pills inserted here -->
-            </div>
+            <div id="inspector-wikilinks-list" class="space-y-1.5"></div>
           </div>
         </div>
       </aside>
@@ -1746,6 +2025,18 @@ moc: "[[MOC_지식원리]]"
           { label: "🔗 1촌 링크 추가", prompt: "연관된 볼트 노드 1개를 추가 추천해서 본문에 삽입해줘" },
           { label: "📄 3줄 핵심 압축", prompt: "이 내용의 핵심 인사이트를 3줄로 압축 요약해줘" }
         ],
+        chatHistory: [
+          {
+            role: "user",
+            content: "클로드 코드 도입 시 왜 4개 폴더로 분리해야 하는지 핵심 원리를 3문장으로 정리해줘.",
+            timestamp: "23:28"
+          },
+          {
+            role: "assistant",
+            content: "클로드 코드의 컨텍스트 윈도우 낭비와 파일 탐색 환각을 방지하기 위한 핵심 원리를 3문장으로 정리했습니다.\n\n1. **컨텍스트 주의력 집중**: 물리적 폴더 분리(`docs`, `tests`, `scripts`, `data`)를 통해 에이전트의 불필요한 전체 스캔을 차단합니다.\n2. **환각 90% 억제**: 특정 기능 수정 시 무관한 파일에 침범하는 사이드 이펙트를 안전하게 격리합니다.\n3. **CLAUDE.md 접근 통제**: 1일 차부터 명시적 권한 제어로 탐색 시간을 30% 단축하고 작업 신뢰도를 확보합니다.",
+            timestamp: "23:29"
+          }
+        ],
         warning: null,
         integrity: {
           score: 100.0,
@@ -1824,6 +2115,18 @@ moc: "[[MOC_커리어]]"
           { label: "🪄 40% 시작점 통일", prompt: "초기 40% 시작 -> 최종 92% 달성 인과로 수치 통일해줘" },
           { label: "🔗 위키링크 자동 보강", prompt: "기존 볼트에서 1촌 위키링크 2개 추천해서 본문에 삽입해줘" },
           { label: "📄 3줄 핵심 압축", prompt: "핵심 3줄 마스터 자소서 요약으로 재압축해줘" }
+        ],
+        chatHistory: [
+          {
+            role: "user",
+            content: "과거 제출본(70% 시작)과 최신 진술(40% 시작) 간 충돌을 방어하고, 3C4P 데이터 기반으로 신뢰 회복 과정을 다루도록 요약해줘.",
+            timestamp: "17:30"
+          },
+          {
+            role: "assistant",
+            content: "수강생 완수율 지표 충돌을 방어하고 **3C4P 프레임워크** 기반의 신뢰 회복 루프로 본문을 교정했습니다.\n\n1. **수치 충돌 방어**: 초기 40% 시작점에서 1차 보완 70%, 최종 92% 달성에 이르는 단계적 상승 인과를 정립했습니다.\n2. **3C4P 구조화**: Customer 불신 분석 및 Product 커리큘럼 재설계를 연계했습니다.\n3. **실시간 반영**: 본문 요약 및 옵시디언 마크다운에 동기화 완료했습니다.",
+            timestamp: "17:31"
+          }
         ],
         warning: {
           code: "#NUM-CONFLICT-01",
@@ -2196,10 +2499,10 @@ falsified_by: "멀티에이전트 3단 합의 아키텍처"
       }
     ];
 
-    // 캐시 동기화 헬퍼 (v6 키로 갱신하여 풍부한 원문 기사 데이터 즉시 적용)
+    // 캐시 동기화 헬퍼 (v8 키로 승격하여 카드별 멀티턴 대화 기록 및 변경 프로세스 로그 영구 보존)
     function saveCardsLocally() {
       try {
-        localStorage.setItem('subrain_cards_v6', JSON.stringify(initialCards));
+        localStorage.setItem('subrain_cards_v9', JSON.stringify(initialCards));
       } catch (e) {
         console.warn('[SUBrain_98] localStorage save error:', e);
       }
@@ -2207,10 +2510,22 @@ falsified_by: "멀티에이전트 3단 합의 아키텍처"
 
     function loadCardsLocally() {
       try {
-        const cached = localStorage.getItem('subrain_cards_v6');
+        const cached = localStorage.getItem('subrain_cards_v9') || localStorage.getItem('subrain_cards_v8');
         if (cached) {
           const parsed = JSON.parse(cached);
           if (Array.isArray(parsed) && parsed.length > 0) {
+            parsed.forEach(c => {
+              const def = defaultCards.find(d => d.id === c.id);
+              if (!c.chatHistory || !Array.isArray(c.chatHistory)) {
+                c.chatHistory = (def && def.chatHistory) ? JSON.parse(JSON.stringify(def.chatHistory)) : [];
+              } else {
+                // Strip legacy thoughtProcess and changeSummary for clean LLM chat
+                c.chatHistory.forEach(m => {
+                  delete m.thoughtProcess;
+                  delete m.changeSummary;
+                });
+              }
+            });
             return parsed;
           }
         }
@@ -2221,10 +2536,11 @@ falsified_by: "멀티에이전트 3단 합의 아키텍처"
     }
 
     let initialCards = loadCardsLocally() || defaultCards;
-    let currentCardIndex = 0;
+    let currentCardIndex = -1; // -1: 초기엔 선택된 카드 없음 (빈 상태 시작)
     let currentDocViewMode = 'preview'; // 'preview' | 'edit' | 'raw'
-    let isInspectorOpen = true;
+    let isInspectorOpen = false; // 기본 닫힘: 사고회로/검증 패널로 화면 어지럽히지 않음
     let isCompareMode = false; // B안: 원문 대조 비교 모드 토글 상태
+    let isCardOpen = false; // 기본 false: 첫 화면은 빈 상태로 시작, 카드 선택 시에만 열림
 
     // =========================================================================
     // VISUAL CATEGORY & CITATION ANCHOR HELPERS (코드 문법 노이즈 전면 제거)
@@ -2300,9 +2616,12 @@ falsified_by: "멀티에이전트 3단 합의 아키텍처"
             moc: 'MOC_지식원리',
             rationale: 'AI 에이전트 인덱싱 및 프로젝트 구조화 기술 원리'
           },
-          purpose: { text: 'AI 에이전트의 컨텍스트 오염과 토큰 낭비를 방지하기 위한 4개 핵심 폴더 분리 구조 제시', source_ref: 3 },
-          rationale: { text: '한정된 컨텍스트 윈도우 환경에서 물리적 폴더 구조를 통해 에이전트의 주의력을 핵심 영역으로 강제 집중시킴', source_ref: 2 },
-          example: { text: 'CLAUDE.md 작성 및 4개 영역(docs, tests, scripts, data) 분리로 불필요 파일 탐색 30% 단축 및 환각 90% 억제', source_ref: 5 },
+          insight: { text: '프롬프트 튜닝보다 물리적 폴더 격리(docs, tests, scripts, data)가 에이전트 환각의 90%를 원천 차단하는 핵심 방패임.', source_ref: 3 },
+          so_what: { text: 'SUBrain_98도 파일과 데몬이 늘어남에 따라 폴더 경계를 분리하지 않으면 에이전트가 엉뚱한 임시파일을 건드려 롤백 피로도와 토큰 비용이 급증함.', source_ref: 2 },
+          action_rule: { text: '신규 프로젝트나 서브모듈 착수 시 1일 차에 CLAUDE.md를 작성하고 4대 폴더 접근 경계(ignore)를 먼저 선언할 것.', source_ref: 5 },
+          purpose: { text: '프롬프트 튜닝보다 물리적 폴더 격리(docs, tests, scripts, data)가 에이전트 환각의 90%를 원천 차단하는 핵심 방패임.', source_ref: 3 },
+          rationale: { text: 'SUBrain_98도 파일과 데몬이 늘어남에 따라 폴더 경계를 분리하지 않으면 에이전트가 엉뚱한 임시파일을 건드려 롤백 피로도와 토큰 비용이 급증함.', source_ref: 2 },
+          example: { text: '신규 프로젝트나 서브모듈 착수 시 1일 차에 CLAUDE.md를 작성하고 4대 폴더 접근 경계(ignore)를 먼저 선언할 것.', source_ref: 5 },
           reflective_prompt: '이 4개 폴더 분리 원칙을 현재 SUBrain_98의 폴더 구조 및 데몬 관리에 어떻게 즉시 적용해 볼 수 있을까요?',
           source_article: {
             platform: 'YouTube Shorts & 테크 아티클 전사본',
@@ -2328,9 +2647,12 @@ falsified_by: "멀티에이전트 3단 합의 아키텍처"
             moc: 'MOC_커리어',
             rationale: '수강생 완주율 전환 및 데이터 기반 신뢰 회복 경험'
           },
-          purpose: { text: '수강생 완주율 지표 충돌을 방어하고, 3C4P 데이터 분석을 통해 신뢰를 회복한 운영 체계화', source_ref: 2 },
-          rationale: { text: '정량 지표 부재 시 1차·2차 세션 난이도 분리 및 주간 피드백 로그 증빙이 가장 강력한 성과 증거가 됨', source_ref: 3 },
-          example: { text: '커리큘럼 개편 및 능동 피드백 루프 도입 후 완주율 40%에서 92%로 수직 상승 (이탈률 0% 달성)', source_ref: 5 },
+          insight: { text: '고객 불신과 이탈의 본질은 고객의 "의지 부족"이 아닌 "시스템 난이도 설계의 결함"에서 비롯됨.', source_ref: 6 },
+          so_what: { text: '수치 지표 충돌(70% vs 40%) 감지 시 면접관의 공격을 방어하려면 40%➔70%➔92%의 단계적 회복 인과 증빙이 필수적임.', source_ref: 2 },
+          action_rule: { text: '문제 발생 시 정량 3C4P 로그 역추적으로 난이도 절벽을 식별하고 1:1 허들 브레이킹 피드백 루프를 즉시 가동할 것.', source_ref: 3 },
+          purpose: { text: '고객 불신과 이탈의 본질은 고객의 "의지 부족"이 아닌 "시스템 난이도 설계의 결함"에서 비롯됨.', source_ref: 6 },
+          rationale: { text: '수치 지표 충돌(70% vs 40%) 감지 시 면접관의 공격을 방어하려면 40%➔70%➔92%의 단계적 회복 인과 증빙이 필수적임.', source_ref: 2 },
+          example: { text: '문제 발생 시 정량 3C4P 로그 역추적으로 난이도 절벽을 식별하고 1:1 허들 브레이킹 피드백 루프를 즉시 가동할 것.', source_ref: 3 },
           reflective_prompt: '이 신뢰 회복 경험을 이번 이직 인터뷰의 1분 자기소개 또는 핵심 성과 무기로 어떻게 한 문장 요약할 수 있을까요?',
           source_article: {
             platform: 'Telegram Ingest & 실무 경험 회고',
@@ -2356,9 +2678,12 @@ falsified_by: "멀티에이전트 3단 합의 아키텍처"
             moc: '00_커리어MOC',
             rationale: '2026 하반기 신입 채용 바이브 코딩 및 AI 역량진단 트렌드'
           },
-          purpose: { text: 'CJ올리브네트웍스 신입 채용의 AI Native 평가 방식(바이브 코딩) 도입 사실 및 일정 아카이빙', source_ref: 1 },
-          rationale: { text: '개발 직무는 실시간 요구사항 구현 역량을, 비개발 직무는 프롬프트 및 워크플로우 활용도를 직접 검증', source_ref: 2 },
-          example: { text: '서류전형 후 AI 역량진단 → 1/2차 면접 → 3주 인턴십 거쳐 2027년 1월 최종 입사 프로세스', source_ref: 4 },
+          insight: { text: '대기업 채용 평가가 암기식 알고리즘(백준)에서 AI를 레버리지 삼아 실무 문제를 해결하는 "바이브 코딩"으로 전면 전환됨.', source_ref: 2 },
+          so_what: { text: '단순 지식 암기로는 차별화가 불가능하며, AI에게 정교한 지시를 내리고 생성된 코드의 결함을 비판적으로 디버깅하는 능력을 입증해야 합격함.', source_ref: 2 },
+          action_rule: { text: '포트폴리오에 AI 코딩 어시스턴트(Claude Code, Cursor)와의 협업 트레이스와 문제 해결 과정을 명시적으로 기록할 것.', source_ref: 5 },
+          purpose: { text: '대기업 채용 평가가 암기식 알고리즘(백준)에서 AI를 레버리지 삼아 실무 문제를 해결하는 "바이브 코딩"으로 전면 전환됨.', source_ref: 2 },
+          rationale: { text: '단순 지식 암기로는 차별화가 불가능하며, AI에게 정교한 지시를 내리고 생성된 코드의 결함을 비판적으로 디버깅하는 능력을 입증해야 합격함.', source_ref: 2 },
+          example: { text: '포트폴리오에 AI 코딩 어시스턴트(Claude Code, Cursor)와의 협업 트레이스와 문제 해결 과정을 명시적으로 기록할 것.', source_ref: 5 },
           reflective_prompt: '내가 보유한 AI 워크플로우 구축 및 프롬프트 경험을 이 전형에 맞춰 어떻게 포지셔닝할 수 있을까요?',
           source_article: {
             platform: 'CJ뉴스룸 채용 공식 보도자료',
@@ -2383,9 +2708,12 @@ falsified_by: "멀티에이전트 3단 합의 아키텍처"
             moc: 'MOC_금융시장',
             rationale: '환율 1,380원 돌파 시 글로벌 패시브 자금의 기계적 엑시트 사이클'
           },
-          purpose: { text: '환율 급등 및 미 국채 금리 반등 시 외국인 순매도 사이클을 규격화하여 방어 포트폴리오 기준 수립', source_ref: 1 },
-          rationale: { text: '외인 수급은 개별 종목 펀더멘털보다 환차손 헷지 알고리즘이 선행하므로 패시브 롤오버 주기가 핵심 지표임', source_ref: 2 },
-          example: { text: '반도체·2차전지 중심 일평균 4,500억 매도 출회 및 코스피 2,600선 하회, VKOSPI 18% 급등', source_ref: 3 },
+          insight: { text: '외국인 순매도 폭증은 개별 기업 실적 악화가 아닌 환율 1,380원 돌파에 따른 글로벌 패시브 헷지 알고리즘의 기계적 매도임.', source_ref: 2 },
+          so_what: { text: '환율 급등기에는 개별 대형주의 어닝 서프라이즈나 호재도 매크로 수급 블랙홀에 묻혀 무력화되므로 섣부른 물타기는 치명적임.', source_ref: 3 },
+          action_rule: { text: '원/달러 환율이 1,375원 밑으로 추세적 안착하기 전까지는 낙폭과대주 공격적 매수를 자제하고 현금 비중 및 헷지 포지션 유지.', source_ref: 5 },
+          purpose: { text: '외국인 순매도 폭증은 개별 기업 실적 악화가 아닌 환율 1,380원 돌파에 따른 글로벌 패시브 헷지 알고리즘의 기계적 매도임.', source_ref: 2 },
+          rationale: { text: '환율 급등기에는 개별 대형주의 어닝 서프라이즈나 호재도 매크로 수급 블랙홀에 묻혀 무력화되므로 섣부른 물타기는 치명적임.', source_ref: 3 },
+          example: { text: '원/달러 환율이 1,375원 밑으로 추세적 안착하기 전까지는 낙폭과대주 공격적 매수를 자제하고 현금 비중 및 헷지 포지션 유지.', source_ref: 5 },
           reflective_prompt: '현재 자산 배분 포트폴리오에서 환율 1,375원 안정 전까지 지켜야 할 리스크 관리 원칙은 무엇인가요?',
           source_article: {
             platform: '한국경제 & 한국거래소 매크로 리포트',
@@ -2410,9 +2738,12 @@ falsified_by: "멀티에이전트 3단 합의 아키텍처"
             moc: 'MOC_커리어',
             rationale: 'B2B 엔터프라이즈 신기술 도입 설득 및 정량적 ROI 증명'
           },
-          purpose: { text: '대형 금융 고객사의 보수적 저항을 뚫고 클라우드 네이티브 실시간 파이프라인 도입을 성사시킨 설득 체계화', source_ref: 1 },
-          rationale: { text: '기존 운영계 무중단 섀도우 PoC와 정량적 ROI 대시보드가 고객사 리스크를 제로로 만드는 결정적 논거', source_ref: 3 },
-          example: { text: '월말 정산 배치 처리 시간 14시간에서 18분으로 97% 단축 및 전원 만장일치 도입 승인', source_ref: 5 },
+          insight: { text: '보수적 의사결정권자를 움직이는 것은 기술의 화려함이 아니라 "고객사 리스크 제로 증명"과 "체감 가능한 정량적 ROI"임.', source_ref: 5 },
+          so_what: { text: '신기술 도입 시 감정적 당위성만 내세우면 기득권 저항에 부딪혀 실패하며, 기존 운영계 무중단을 증명하는 섀도우 PoC가 승패를 결정함.', source_ref: 2 },
+          action_rule: { text: '기존 운영계를 보존한 채 CDC 실시간 복제 섀도우 PoC 대시보드를 제공하고, 실무진 핸즈온 세션으로 학습 부하를 분산시킬 것.', source_ref: 3 },
+          purpose: { text: '보수적 의사결정권자를 움직이는 것은 기술의 화려함이 아니라 "고객사 리스크 제로 증명"과 "체감 가능한 정량적 ROI"임.', source_ref: 5 },
+          rationale: { text: '신기술 도입 시 감정적 당위성만 내세우면 기득권 저항에 부딪혀 실패하며, 기존 운영계 무중단을 증명하는 섀도우 PoC가 승패를 결정함.', source_ref: 2 },
+          example: { text: '기존 운영계를 보존한 채 CDC 실시간 복제 섀도우 PoC 대시보드를 제공하고, 실무진 핸즈온 세션으로 학습 부하를 분산시킬 것.', source_ref: 3 },
           reflective_prompt: '신기술 도입을 망설이는 이해관계자를 만났을 때, 나의 어떤 PoC 경험을 근거로 제시할 수 있을까요?',
           source_article: {
             platform: '모빅랩 사내 프로젝트 회고록',
@@ -2437,9 +2768,12 @@ falsified_by: "멀티에이전트 3단 합의 아키텍처"
             moc: 'MOC_커리어',
             rationale: '1인 프리랜서 업무 자동화 솔루션 론칭 및 전환율 4배 최적화'
           },
-          purpose: { text: '1인 프리랜서 대상 실무 업무 자동화 패키지 론칭 및 랜딩페이지 최적화를 통한 비즈니스 스케일업', source_ref: 1 },
-          rationale: { text: '단순 이론 강의가 아닌 즉시 복제 가능한 12종 실전 템플릿과 직무별 Before/After 실증 증거가 전환율 견인', source_ref: 2 },
-          example: { text: '상세페이지 A/B 테스트 후 구매 전환율 8% → 32% 수직 상승 및 1차 300세트 전량 완판', source_ref: 4 },
+          insight: { text: '지식 비즈니스에서 고객이 지갑을 여는 이유는 정보의 양이 아니라 "실행에 드는 시간과 시행착오를 압축해주는 완성형 레버리지" 때문임.', source_ref: 5 },
+          so_what: { text: '추상적 이론 강의는 구매 전환율 8%에 머물지만, 즉시 복제 가능한 실전 템플릿과 직무별 실증 Before/After는 전환율을 32%(4배)로 폭발시킴.', source_ref: 3 },
+          action_rule: { text: '모든 지식 상품 및 사내 툴은 "구매 즉시 복제하여 15분 내 결과를 내는 템플릿" 형태로 모듈화하고 A/B 테스트로 검증할 것.', source_ref: 2 },
+          purpose: { text: '지식 비즈니스에서 고객이 지갑을 여는 이유는 정보의 양이 아니라 "실행에 드는 시간과 시행착오를 압축해주는 완성형 레버리지" 때문임.', source_ref: 5 },
+          rationale: { text: '추상적 이론 강의는 구매 전환율 8%에 머물지만, 즉시 복제 가능한 실전 템플릿과 직무별 실증 Before/After는 전환율을 32%(4배)로 폭발시킴.', source_ref: 3 },
+          example: { text: '모든 지식 상품 및 사내 툴은 "구매 즉시 복제하여 15분 내 결과를 내는 템플릿" 형태로 모듈화하고 A/B 테스트로 검증할 것.', source_ref: 2 },
           reflective_prompt: '이 템플릿 중심 패키징 및 A/B 테스트 경험을 제품 기획자(PM) 역량 인터뷰에서 어떻게 증명할 수 있을까요?',
           source_article: {
             platform: '프리랜서 비즈니스 론칭 노트 & 실무 회고',
@@ -2464,9 +2798,12 @@ falsified_by: "멀티에이전트 3단 합의 아키텍처"
             moc: 'MOC_지식원리',
             rationale: '클라우드 벡터 DB 종속 탈피 및 로컬 인프로세스 임베딩 아키텍처'
           },
-          purpose: { text: '외부 클라우드 종속 없이 100% 로컬 오프라인 환경에서 구동되는 고속 개인 지식 벡터 검색 아키텍처 수립', source_ref: 1 },
-          rationale: { text: '단일 SQLite 파일 내 sqlite-vec 인프로세스 ANN 검색과 FTS5 BM25 하이브리드 결합이 속도와 프라이버시 동시 확보', source_ref: 2 },
-          example: { text: '10,000건 마크다운 기준 쿼리 응답 시간 12ms 미만 및 메모리 점유율 80MB 이하 달성', source_ref: 4 },
+          insight: { text: '개인 지식 관리에 고비용·보안 취약점의 클라우드 벡터 DB가 불필요하며, 단일 파일 기반 sqlite-vec 인프로세스 ANN이 압도적임.', source_ref: 2 },
+          so_what: { text: 'SUBrain_98의 개인 메모 및 회고 데이터가 외부 서버로 유출되는 리스크를 원천 봉쇄하고 12ms 이내 초고속 로컬 시맨틱 검색 환경 구축 가능.', source_ref: 4 },
+          action_rule: { text: 'SQLite FTS5(BM25) 키워드 검색과 sqlite-vec 코사인 유사도를 RRF(역순위 결합)하는 로컬 하이브리드 검색 레이어를 설계할 것.', source_ref: 3 },
+          purpose: { text: '개인 지식 관리에 고비용·보안 취약점의 클라우드 벡터 DB가 불필요하며, 단일 파일 기반 sqlite-vec 인프로세스 ANN이 압도적임.', source_ref: 2 },
+          rationale: { text: 'SUBrain_98의 개인 메모 및 회고 데이터가 외부 서버로 유출되는 리스크를 원천 봉쇄하고 12ms 이내 초고속 로컬 시맨틱 검색 환경 구축 가능.', source_ref: 4 },
+          example: { text: 'SQLite FTS5(BM25) 키워드 검색과 sqlite-vec 코사인 유사도를 RRF(역순위 결합)하는 로컬 하이브리드 검색 레이어를 설계할 것.', source_ref: 3 },
           reflective_prompt: '현재 SUBrain_98의 백엔드 검색 레이어에 이 sqlite-vec 하이브리드 검색을 어떻게 접목할 수 있을까요?',
           source_article: {
             platform: '온디바이스 AI 아키텍처 연구 노트',
@@ -2491,9 +2828,12 @@ falsified_by: "멀티에이전트 3단 합의 아키텍처"
             moc: 'MOC_지식원리',
             rationale: '초거대 단일 모델 의존 탈피 및 소형 전문 모델 체이닝 가설'
           },
-          purpose: { text: '단일 프론티어 모델의 비용 폭증과 레이턴시를 해결하기 위한 라우터 기반 SLM 체이닝 아키텍처 검증', source_ref: 1 },
-          rationale: { text: '80%의 단순 태스크를 8B급 소형 모델에 위임하고 20%의 심층 추론에만 대형 모델을 호출하는 지능형 오케스트레이션', source_ref: 2 },
-          example: { text: '일 1,000건 기준 API 비용 74.2% 절감, 레이턴시 4.2초 → 1.4초 단축, 무결성 98.4% 유지', source_ref: 4 },
+          insight: { text: '초거대 단일 프론티어 모델 의존은 비용과 지연시간의 재앙이며, 경량 라우터 기반의 SLM(소형 전문 모델) 체이닝이 시스템의 미래임.', source_ref: 2 },
+          so_what: { text: '모든 파이프라인에 GPT-4o/Sonnet을 쓰면 일 1,000건 시 비용 감당이 불가하지만, 8B 모델로 80%를 처리하면 비용 74% 절감 및 속도 3배 개선.', source_ref: 4 },
+          action_rule: { text: '워커-디렉터-크리틱 에이전트 구조에서 1단계 분류와 마크다운 정제는 SLM에 위임하고 논리 모순 검증에만 프론티어 모델을 체이닝할 것.', source_ref: 3 },
+          purpose: { text: '초거대 단일 프론티어 모델 의존은 비용과 지연시간의 재앙이며, 경량 라우터 기반의 SLM(소형 전문 모델) 체이닝이 시스템의 미래임.', source_ref: 2 },
+          rationale: { text: '모든 파이프라인에 GPT-4o/Sonnet을 쓰면 일 1,000건 시 비용 감당이 불가하지만, 8B 모델로 80%를 처리하면 비용 74% 절감 및 속도 3배 개선.', source_ref: 4 },
+          example: { text: '워커-디렉터-크리틱 에이전트 구조에서 1단계 분류와 마크다운 정제는 SLM에 위임하고 논리 모순 검증에만 프론티어 모델을 체이닝할 것.', source_ref: 3 },
           reflective_prompt: '현재 개발 중인 데몬 워커와 비판관 구조에 이 체이닝 경제성을 어떻게 단계별로 이식할 수 있을까요?',
           source_article: {
             platform: 'AI 시스템 엔지니어링 가설 검증 리포트',
@@ -2511,6 +2851,9 @@ falsified_by: "멀티에이전트 3단 합의 아키텍처"
       } else {
         const isExp = title.includes('경험') || title.includes('성과');
         const extracted = extractParagraphsFromMarkdown(card.markdown_content || card.raw_content || '', card);
+        const insightText = card.synthesis ? card.synthesis.slice(0, 100) : card.title;
+        const soWhatText = extracted.length > 1 ? extracted[1].text.slice(0, 120) : '개인 지식 볼트 맥락과의 인과 관계 및 후속 영향도 검토 완료';
+        const actionRuleText = extracted.length > 2 ? extracted[2].text.slice(0, 120) : '헌법 §1.9 원칙에 따라 상위 MOC 및 1촌 인접 노드에 연결하여 보존할 것';
         return {
           module_type: card.category || (isExp ? '커리어 경험 (STAR)' : '영구 지식 (CCIA)'),
           visual_category: {
@@ -2522,14 +2865,17 @@ falsified_by: "멀티에이전트 3단 합의 아키텍처"
             moc: card.wikilinks?.[0]?.replace(/\[\[|\]\]/g, '') || (isExp ? 'MOC_커리어' : 'MOC_지식원리'),
             rationale: '헌법 분류 및 볼트 온톨로지에 따라 적정 지식 허브에 배치됨'
           },
-          purpose: { text: card.synthesis ? card.synthesis.slice(0, 85) + '...' : card.title, source_ref: 1 },
-          rationale: { text: extracted.length > 1 ? extracted[1].text.slice(0, 90) + '...' : '헌법 §1.9 인과성 및 시점 맥락 검증 통과', source_ref: Math.min(2, extracted.length) },
-          example: { text: extracted.length > 2 ? extracted[2].text.slice(0, 90) + '...' : '볼트 인덱스 대조 및 1촌 인접 노드 검증 완료', source_ref: Math.min(3, extracted.length) },
+          insight: { text: insightText, source_ref: 1 },
+          so_what: { text: soWhatText, source_ref: Math.min(2, extracted.length) },
+          action_rule: { text: actionRuleText, source_ref: Math.min(3, extracted.length) },
+          purpose: { text: insightText, source_ref: 1 },
+          rationale: { text: soWhatText, source_ref: Math.min(2, extracted.length) },
+          example: { text: actionRuleText, source_ref: Math.min(3, extracted.length) },
           reflective_prompt: '이 기록을 통해 얻은 핵심 인사이트를 현재 진행 중인 내 목표에 어떻게 접목해 볼 수 있을까요?',
           source_article: {
             platform: card.source || 'Telegram Ingest & 볼트 마크다운',
             title: card.title,
-            url: 'internal://ingest',
+            url: card.url || 'internal://ingest',
             paragraphs: extracted
           }
         };
@@ -2541,16 +2887,21 @@ falsified_by: "멀티에이전트 3단 합의 아키텍처"
       if (!container) return;
 
       const digest = getCardStructuredDigest(card);
+      if (!digest) return;
       const cat = digest.visual_category;
 
-      const purposeAnchor = digest.purpose.source_ref 
-        ? `<button onclick="highlightSourceParagraph(${digest.purpose.source_ref})" class="cite-pill" title="원문 §${digest.purpose.source_ref} 문단 대조">§${digest.purpose.source_ref}</button>` 
+      const insight = digest.insight || digest.purpose || { text: '' };
+      const soWhat = digest.so_what || digest.rationale || { text: '' };
+      const actionRule = digest.action_rule || digest.example || { text: '' };
+
+      const insightAnchor = insight.source_ref 
+        ? `<button onclick="highlightSourceParagraph(${insight.source_ref})" class="cite-pill" title="원문 §${insight.source_ref} 문단 대조">§${insight.source_ref}</button>` 
         : '';
-      const rationaleAnchor = digest.rationale.source_ref 
-        ? `<button onclick="highlightSourceParagraph(${digest.rationale.source_ref})" class="cite-pill" title="원문 §${digest.rationale.source_ref} 문단 대조">§${digest.rationale.source_ref}</button>` 
+      const soWhatAnchor = soWhat.source_ref 
+        ? `<button onclick="highlightSourceParagraph(${soWhat.source_ref})" class="cite-pill" title="원문 §${soWhat.source_ref} 문단 대조">§${soWhat.source_ref}</button>` 
         : '';
-      const exampleAnchor = digest.example.source_ref 
-        ? `<button onclick="highlightSourceParagraph(${digest.example.source_ref})" class="cite-pill" title="원문 §${digest.example.source_ref} 문단 대조">§${digest.example.source_ref}</button>` 
+      const actionAnchor = actionRule.source_ref 
+        ? `<button onclick="highlightSourceParagraph(${actionRule.source_ref})" class="cite-pill" title="원문 §${actionRule.source_ref} 문단 대조">§${actionRule.source_ref}</button>` 
         : '';
 
       const linksHtml = (card.wikilinks || []).map(wl => formatVisualWikilink(wl)).join(' ');
@@ -2574,42 +2925,48 @@ falsified_by: "멀티에이전트 3단 합의 아키텍처"
         </div>
 
         <div class="space-y-3 text-xs leading-relaxed">
-          <div class="flex items-start space-x-2.5 p-2.5 rounded-xl bg-white dark:bg-zinc-900 border border-neutral-200/70 dark:border-zinc-800 shadow-2xs">
-            <div class="w-6 h-6 rounded-lg bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-bold text-xs flex-shrink-0 mt-0.5">
-              🎯
+          <!-- 1. 핵심 인사이트 (Key Insight) -->
+          <div class="flex items-start space-x-2.5 p-3 rounded-xl bg-white dark:bg-zinc-900 border border-neutral-200/70 dark:border-zinc-800 shadow-2xs transition-all hover:border-amber-300 dark:hover:border-amber-700">
+            <div class="w-6 h-6 rounded-lg bg-amber-50 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 flex items-center justify-center font-bold text-xs flex-shrink-0 mt-0.5 shadow-2xs">
+              💡
             </div>
             <div class="flex-1 min-w-0">
-              <div class="flex items-center justify-between mb-0.5">
-                <span class="font-semibold text-neutral-900 dark:text-zinc-100 text-xs">서술 목적 (Thesis & Goal)</span>
-                ${purposeAnchor}
+              <div class="flex items-center justify-between mb-1">
+                <span class="font-semibold text-neutral-900 dark:text-zinc-100 text-xs">핵심 인사이트 (Key Insight)</span>
+                ${insightAnchor}
               </div>
-              <p class="text-neutral-700 dark:text-zinc-300">${digest.purpose.text}</p>
+              <p class="text-neutral-700 dark:text-zinc-300 leading-relaxed">${insight.text}</p>
             </div>
           </div>
 
-          <div class="flex items-start space-x-2.5 p-2.5 rounded-xl bg-white dark:bg-zinc-900 border border-neutral-200/70 dark:border-zinc-800 shadow-2xs">
-            <div class="w-6 h-6 rounded-lg bg-purple-50 dark:bg-purple-950/60 text-purple-600 dark:text-purple-400 flex items-center justify-center font-bold text-xs flex-shrink-0 mt-0.5">
-              🔍
+          <!-- 2. 그래서 나에게 무슨 의미인가? (So What? / Context & Impact) -->
+          <div class="flex items-start space-x-2.5 p-3 rounded-xl bg-gradient-to-r from-indigo-50/70 via-indigo-50/30 to-white dark:from-indigo-950/40 dark:via-zinc-900 dark:to-zinc-900 border border-indigo-200/80 dark:border-indigo-800/70 shadow-2xs transition-all hover:border-indigo-400 dark:hover:border-indigo-600">
+            <div class="w-6 h-6 rounded-lg bg-indigo-100 dark:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 flex items-center justify-center font-bold text-xs flex-shrink-0 mt-0.5 shadow-2xs">
+              ⚡
             </div>
             <div class="flex-1 min-w-0">
-              <div class="flex items-center justify-between mb-0.5">
-                <span class="font-semibold text-neutral-900 dark:text-zinc-100 text-xs">핵심 논리 & 근거 (Rationale)</span>
-                ${rationaleAnchor}
+              <div class="flex items-center justify-between mb-1">
+                <span class="font-semibold text-indigo-950 dark:text-indigo-200 text-xs flex items-center gap-1">
+                  <span>그래서 나에게 무슨 의미인가?</span>
+                  <span class="text-[10px] font-mono font-normal opacity-70">(So What?)</span>
+                </span>
+                ${soWhatAnchor}
               </div>
-              <p class="text-neutral-700 dark:text-zinc-300">${digest.rationale.text}</p>
+              <p class="text-neutral-800 dark:text-zinc-200 font-medium leading-relaxed">${soWhat.text}</p>
             </div>
           </div>
 
-          <div class="flex items-start space-x-2.5 p-2.5 rounded-xl bg-white dark:bg-zinc-900 border border-neutral-200/70 dark:border-zinc-800 shadow-2xs">
-            <div class="w-6 h-6 rounded-lg bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-bold text-xs flex-shrink-0 mt-0.5">
-              📌
+          <!-- 3. 실전 행동 강령 (Action Rule) -->
+          <div class="flex items-start space-x-2.5 p-3 rounded-xl bg-white dark:bg-zinc-900 border border-neutral-200/70 dark:border-zinc-800 shadow-2xs transition-all hover:border-emerald-300 dark:hover:border-emerald-700">
+            <div class="w-6 h-6 rounded-lg bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-bold text-xs flex-shrink-0 mt-0.5 shadow-2xs">
+              🛠️
             </div>
             <div class="flex-1 min-w-0">
-              <div class="flex items-center justify-between mb-0.5">
-                <span class="font-semibold text-neutral-900 dark:text-zinc-100 text-xs">구체적 사례 / 실행법 (Case & Action)</span>
-                ${exampleAnchor}
+              <div class="flex items-center justify-between mb-1">
+                <span class="font-semibold text-neutral-900 dark:text-zinc-100 text-xs">실전 행동 강령 (Action Rule)</span>
+                ${actionAnchor}
               </div>
-              <p class="text-neutral-700 dark:text-zinc-300">${digest.example.text}</p>
+              <p class="text-neutral-700 dark:text-zinc-300 leading-relaxed">${actionRule.text}</p>
             </div>
           </div>
         </div>
@@ -2628,6 +2985,7 @@ falsified_by: "멀티에이전트 3단 합의 아키텍처"
 
       const digest = getCardStructuredDigest(card);
       const src = digest.source_article;
+      const cat = digest.visual_category;
 
       let paragraphsHtml = '';
       let totalChars = 0;
@@ -2676,32 +3034,140 @@ falsified_by: "멀티에이전트 3단 합의 아키텍처"
         </div>
       `;
 
+      const insight = digest.insight || digest.purpose || { text: '' };
+      const soWhat = digest.so_what || digest.rationale || { text: '' };
+      const actionRule = digest.action_rule || digest.example || { text: '' };
+
+      const insightAnchor = insight.source_ref 
+        ? `<button onclick="highlightSourceParagraph(${insight.source_ref})" class="cite-pill" title="원문 §${insight.source_ref} 문단 대조">§${insight.source_ref}</button>` 
+        : '';
+      const soWhatAnchor = soWhat.source_ref 
+        ? `<button onclick="highlightSourceParagraph(${soWhat.source_ref})" class="cite-pill" title="원문 §${soWhat.source_ref} 문단 대조">§${soWhat.source_ref}</button>` 
+        : '';
+      const actionAnchor = actionRule.source_ref 
+        ? `<button onclick="highlightSourceParagraph(${actionRule.source_ref})" class="cite-pill" title="원문 §${actionRule.source_ref} 문단 대조">§${actionRule.source_ref}</button>` 
+        : '';
+
+      const linksHtml = (card.wikilinks || []).map(wl => formatVisualWikilink(wl)).join(' ');
+
       rightPane.innerHTML = `
         <div class="sticky top-0 bg-white/95 dark:bg-zinc-950/95 backdrop-blur-md pb-3 mb-4 border-b border-neutral-200 dark:border-zinc-800 flex items-center justify-between z-10">
           <div class="flex items-center space-x-2">
             <span class="px-2 py-0.5 rounded-md bg-purple-600 text-white text-[10px] font-mono font-bold tracking-wider">
-              DIGESTION
+              AI REASONING THREAD
             </span>
-            <span class="text-xs font-semibold text-neutral-900 dark:text-zinc-100">AI 구조화 소화본 (3단 프레임워크)</span>
+            <span class="text-xs font-semibold text-neutral-900 dark:text-zinc-100">원문 대조 사고 회로 & 통합 소화본</span>
           </div>
           <button onclick="toggleCompareMode()" class="px-2.5 py-1 text-xs rounded-lg bg-neutral-100 dark:bg-zinc-800 hover:bg-neutral-200 dark:hover:bg-zinc-700 text-neutral-700 dark:text-zinc-300 font-medium transition-colors">
             ✕ 단일 뷰로 복귀
           </button>
         </div>
-        <div id="compare-digestion-card" class="rounded-2xl border border-indigo-100 dark:border-zinc-800 bg-gradient-to-br from-indigo-50/40 via-white to-purple-50/20 dark:from-zinc-900/90 dark:via-zinc-900 dark:to-zinc-950 p-5 shadow-xs space-y-4"></div>
-        <div class="pt-4 border-t border-neutral-200 dark:border-zinc-800">
-          <details class="text-xs">
-            <summary class="cursor-pointer font-medium text-neutral-600 dark:text-zinc-400 hover:text-neutral-900 dark:hover:text-zinc-100 select-none py-1">
-              📄 옵시디언 전체 본문 미리보기 (펼치기)
-            </summary>
-            <div class="mt-3 p-4 bg-neutral-50 dark:bg-zinc-900 rounded-xl border border-neutral-200 dark:border-zinc-800 obsidian-body">
-              ${renderObsidianMarkdown(card.markdown_content || generateStandardMarkdown(card), card)}
+
+        <!-- Thinking & Reasoning Thread: 원문 인용과 사고 과정의 일체형 결합 -->
+        <div class="space-y-4 text-xs">
+          <!-- Step 1: 원문 수집 및 문제의식 포착 -->
+          <div class="p-3.5 rounded-xl bg-neutral-50 dark:bg-zinc-900 border border-neutral-200/80 dark:border-zinc-800 shadow-2xs space-y-1.5">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center space-x-2">
+                <span class="w-5 h-5 rounded-full bg-blue-100 dark:bg-blue-950 text-blue-600 dark:text-blue-400 text-[10px] font-bold flex items-center justify-center font-mono">1</span>
+                <span class="font-semibold text-neutral-800 dark:text-zinc-200">원문 탐색 & 핵심 문제의식 포착</span>
+              </div>
+              <button onclick="highlightSourceParagraph(1)" class="cite-pill" title="원문 §1 문단 대조">§1 탐색</button>
             </div>
-          </details>
+            <p class="text-neutral-600 dark:text-zinc-400 text-[11.5px] leading-relaxed">
+              ${card.source || '웹/텔레그램'}에서 유입된 원문 텍스트(${totalChars.toLocaleString()}자)를 정밀 파싱하여, 정보의 파편화와 실무 적용 병목 구간을 탐색했습니다.
+            </p>
+          </div>
+
+          <!-- Step 2: 헌법 분류 및 비판관 인과 검증 -->
+          <div class="p-3.5 rounded-xl bg-neutral-50 dark:bg-zinc-900 border border-neutral-200/80 dark:border-zinc-800 shadow-2xs space-y-1.5">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center space-x-2">
+                <span class="w-5 h-5 rounded-full bg-indigo-100 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 text-[10px] font-bold flex items-center justify-center font-mono">2</span>
+                <span class="font-semibold text-neutral-800 dark:text-zinc-200">헌법 분류 및 인과 추론</span>
+              </div>
+              <div class="flex items-center space-x-1">
+                <span class="px-2 py-0.5 rounded text-[10px] font-medium bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">${digest.module_type}</span>
+                ${insightAnchor}
+              </div>
+            </div>
+            <p class="text-neutral-600 dark:text-zinc-400 text-[11.5px] leading-relaxed">
+              00_헌법 제7조 분류 체계에 따라 <span class="font-medium text-neutral-800 dark:text-zinc-200">${cat.label}</span>로 판정하고, 단순 주장이 아닌 인과 관계(85점 룰)를 검증했습니다.
+            </p>
+          </div>
+
+          <!-- Step 3: 소화된 3단 테제 (Insight ➔ So What ➔ Action) -->
+          <div class="p-4 rounded-2xl bg-gradient-to-br from-indigo-50/50 via-white to-purple-50/30 dark:from-zinc-900 dark:via-zinc-900 dark:to-zinc-950 border border-indigo-200/80 dark:border-zinc-800 shadow-xs space-y-3.5">
+            <div class="flex items-center justify-between border-b border-indigo-100 dark:border-zinc-800 pb-2">
+              <div class="flex items-center space-x-1.5">
+                <span class="text-sm">⚡</span>
+                <span class="font-bold text-neutral-900 dark:text-zinc-100 text-xs">도출된 3단 지식 테제 (3-Pillar Digest)</span>
+              </div>
+              <span class="text-[10px] font-mono text-indigo-600 dark:text-indigo-400 font-semibold">Step 3 Final Thesis</span>
+            </div>
+
+            <!-- 1. Insight -->
+            <div class="space-y-1">
+              <div class="flex items-center justify-between">
+                <span class="font-semibold text-amber-700 dark:text-amber-400 text-[11.5px] flex items-center gap-1">
+                  <span>💡 핵심 인사이트:</span>
+                </span>
+                ${insightAnchor}
+              </div>
+              <p class="text-neutral-700 dark:text-zinc-300 text-xs pl-2.5 border-l-2 border-amber-300 dark:border-amber-700 leading-relaxed">${insight.text}</p>
+            </div>
+
+            <!-- 2. So What -->
+            <div class="space-y-1 bg-indigo-50/80 dark:bg-indigo-950/40 p-2.5 rounded-xl border border-indigo-100 dark:border-indigo-900/50">
+              <div class="flex items-center justify-between">
+                <span class="font-semibold text-indigo-950 dark:text-indigo-200 text-[11.5px] flex items-center gap-1">
+                  <span>⚡ 그래서 나에게 무슨 의미인가? (So What?):</span>
+                </span>
+                ${soWhatAnchor}
+              </div>
+              <p class="text-neutral-800 dark:text-zinc-200 text-xs font-medium leading-relaxed">${soWhat.text}</p>
+            </div>
+
+            <!-- 3. Action Rule -->
+            <div class="space-y-1">
+              <div class="flex items-center justify-between">
+                <span class="font-semibold text-emerald-700 dark:text-emerald-400 text-[11.5px] flex items-center gap-1">
+                  <span>🛠️ 실전 행동 강령 (Action Rule):</span>
+                </span>
+                ${actionAnchor}
+              </div>
+              <p class="text-neutral-700 dark:text-zinc-300 text-xs pl-2.5 border-l-2 border-emerald-300 dark:border-emerald-700 leading-relaxed">${actionRule.text}</p>
+            </div>
+          </div>
+
+          <!-- Step 4: 볼트 인지적 연결망 판정 -->
+          <div class="p-3.5 rounded-xl bg-neutral-50 dark:bg-zinc-900 border border-neutral-200/80 dark:border-zinc-800 shadow-2xs space-y-2">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center space-x-2">
+                <span class="w-5 h-5 rounded-full bg-purple-100 dark:bg-purple-950 text-purple-600 dark:text-purple-400 text-[10px] font-bold flex items-center justify-center font-mono">4</span>
+                <span class="font-semibold text-neutral-800 dark:text-zinc-200">볼트 1-Hop 인지적 연결망 배치</span>
+              </div>
+              <span class="text-[10px] font-mono text-neutral-400 dark:text-zinc-500">MOC & Wikilinks</span>
+            </div>
+            <div class="flex flex-wrap items-center gap-1.5 pt-0.5">
+              ${linksHtml}
+            </div>
+          </div>
+
+          <!-- Accordion: Obsidian Markdown Raw -->
+          <div class="pt-2 border-t border-neutral-200 dark:border-zinc-800">
+            <details class="text-xs group">
+              <summary class="cursor-pointer font-medium text-neutral-600 dark:text-zinc-400 hover:text-neutral-900 dark:hover:text-zinc-100 select-none py-1 flex items-center justify-between">
+                <span>📄 옵시디언 영구 저장 마크다운 본문 보기</span>
+                <span class="text-[10px] text-neutral-400 group-open:rotate-180 transition-transform">▼</span>
+              </summary>
+              <div class="mt-3 p-4 bg-neutral-50 dark:bg-zinc-900 rounded-xl border border-neutral-200 dark:border-zinc-800 obsidian-body">
+                ${renderObsidianMarkdown(card.markdown_content || generateStandardMarkdown(card), card)}
+              </div>
+            </details>
+          </div>
         </div>
       `;
-
-      renderTriageDigestion(card, 'compare-digestion-card');
     }
 
     function toggleCompareMode() {
@@ -2789,23 +3255,70 @@ falsified_by: "멀티에이전트 3단 합의 아키텍처"
       renderQueue();
     }
 
-    // View Mode Toggle (미리보기 vs 편집하기 2모드 단순화)
+    // =========================================================================
+    // FILE MENU CONTROLLER (데스크톱 스타일 좌측 상단 메뉴)
+    // =========================================================================
+    function toggleFileMenu(event) {
+      if (event) event.stopPropagation();
+      const dropdown = document.getElementById('file-menu-dropdown');
+      const chevron = document.getElementById('file-menu-chevron');
+      if (!dropdown) return;
+      const isHidden = dropdown.classList.contains('hidden');
+      if (isHidden) {
+        dropdown.classList.remove('hidden');
+        if (chevron) chevron.classList.add('rotate-180');
+      } else {
+        dropdown.classList.add('hidden');
+        if (chevron) chevron.classList.remove('rotate-180');
+      }
+    }
+
+    function closeFileMenu() {
+      const dropdown = document.getElementById('file-menu-dropdown');
+      const chevron = document.getElementById('file-menu-chevron');
+      if (dropdown) dropdown.classList.add('hidden');
+      if (chevron) chevron.classList.remove('rotate-180');
+    }
+
+    window.addEventListener('click', (e) => {
+      const container = document.getElementById('file-menu-container');
+      if (container && !container.contains(e.target)) {
+        closeFileMenu();
+      }
+      const fontContainer = document.getElementById('font-switcher-container');
+      if (fontContainer && !fontContainer.contains(e.target)) {
+        closeFontDropdown();
+      }
+    });
+
+    // View Mode Toggle (File 메뉴 및 단축키 연동)
     function setDocViewMode(mode) {
       currentDocViewMode = mode;
       const previewContainer = document.getElementById('doc-preview-container');
       const editContainer = document.getElementById('doc-edit-container');
 
+      const checkPreview = document.getElementById('check-view-preview');
+      const checkEdit = document.getElementById('check-view-edit');
       const btnPreview = document.getElementById('btn-view-preview');
       const btnEdit = document.getElementById('btn-view-edit');
 
-      const activeClass = 'px-2.5 py-1 text-xs font-medium rounded-md bg-white dark:bg-zinc-700 text-neutral-900 dark:text-zinc-100 shadow-xs transition-all flex items-center space-x-1 whitespace-nowrap flex-shrink-0';
-      const inactiveClass = 'px-2.5 py-1 text-xs font-medium rounded-md text-neutral-600 dark:text-zinc-400 hover:text-neutral-900 dark:hover:text-zinc-100 transition-all flex items-center space-x-1 whitespace-nowrap flex-shrink-0';
+      if (checkPreview) {
+        checkPreview.className = mode === 'preview' ? 'w-3.5 text-indigo-600 dark:text-indigo-400 font-bold' : 'w-3.5 text-transparent font-bold';
+      }
+      if (checkEdit) {
+        checkEdit.className = mode === 'edit' ? 'w-3.5 text-indigo-600 dark:text-indigo-400 font-bold' : 'w-3.5 text-transparent font-bold';
+      }
 
+      const activeItemClass = 'w-full px-3 py-1.5 text-left bg-neutral-100 dark:bg-zinc-800 text-neutral-900 dark:text-zinc-100 flex items-center justify-between transition-colors font-semibold';
+      const inactiveItemClass = 'w-full px-3 py-1.5 text-left hover:bg-neutral-100 dark:hover:bg-zinc-800/80 text-neutral-700 dark:text-zinc-300 flex items-center justify-between transition-colors';
+
+      if (btnPreview) btnPreview.className = mode === 'preview' ? activeItemClass : inactiveItemClass;
+      if (btnEdit) btnEdit.className = mode === 'edit' ? activeItemClass : inactiveItemClass;
+
+      const diffContainer = document.getElementById('doc-diff-container');
       if (previewContainer) previewContainer.classList.add('hidden');
       if (editContainer) editContainer.classList.add('hidden');
-
-      if (btnPreview) btnPreview.className = inactiveClass;
-      if (btnEdit) btnEdit.className = inactiveClass;
+      if (diffContainer) diffContainer.classList.add('hidden');
 
       const card = initialCards[currentCardIndex] || initialCards[0];
       if (!card) return;
@@ -2814,7 +3327,6 @@ falsified_by: "멀티에이전트 3단 합의 아키텍처"
 
       if (mode === 'edit') {
         if (editContainer) editContainer.classList.remove('hidden');
-        if (btnEdit) btnEdit.className = activeClass;
         if (editor) {
           editor.value = card.markdown_content || generateStandardMarkdown(card);
           editor.focus();
@@ -2829,21 +3341,29 @@ falsified_by: "멀티에이전트 3단 합의 아키텍처"
         const currentContent = card.markdown_content || generateStandardMarkdown(card);
         if (previewContainer) {
           previewContainer.innerHTML = renderObsidianMarkdown(currentContent, card);
-          previewContainer.classList.remove('hidden');
+        }
+        if (card.pending_proposal && isProposalDiffMode) {
+          if (diffContainer) diffContainer.classList.remove('hidden');
+          if (previewContainer) previewContainer.classList.add('hidden');
+        } else {
+          if (previewContainer) previewContainer.classList.remove('hidden');
+          if (diffContainer) diffContainer.classList.add('hidden');
         }
         const rawEl = document.getElementById('doc-raw-content');
         if (rawEl) rawEl.innerText = currentContent;
-
-        if (btnPreview) btnPreview.className = activeClass;
       }
     }
 
-    // Toggle Inspector Sidebar ("저 단계들을 한쪽으로 정리")
-    function toggleInspector() {
+    // Toggle Copilot / Inspector Right Sidebar (Antigravity CLI Panel)
+    function toggleInspector(forceOpen) {
       const panel = document.getElementById('inspector-panel');
       const resizer = document.getElementById('resizer-inspector');
       const openBtn = document.getElementById('btn-open-inspector');
-      isInspectorOpen = !isInspectorOpen;
+      if (typeof forceOpen === 'boolean') {
+        isInspectorOpen = forceOpen;
+      } else {
+        isInspectorOpen = !isInspectorOpen;
+      }
       if (isInspectorOpen) {
         if (panel) panel.classList.remove('hidden');
         if (resizer) resizer.classList.remove('hidden');
@@ -2851,7 +3371,7 @@ falsified_by: "멀티에이전트 3단 합의 아키텍처"
       } else {
         if (panel) panel.classList.add('hidden');
         if (resizer) resizer.classList.add('hidden');
-        if (openBtn) openBtn.classList.remove('hidden');
+        if (openBtn && isCardOpen) openBtn.classList.remove('hidden');
       }
     }
 
@@ -2981,11 +3501,223 @@ ${card.synthesis || ""}
 `;
     }
 
+    let isProposalDiffMode = true;
+
+    function toggleProposalDiffDisplay(showDiff) {
+      isProposalDiffMode = showDiff;
+      const diffBox = document.getElementById('doc-diff-container');
+      const previewBox = document.getElementById('doc-preview-container');
+      const btnDiff = document.getElementById('btn-toggle-diff-diff');
+      const btnPrev = document.getElementById('btn-toggle-diff-preview');
+
+      if (showDiff) {
+        if (diffBox) diffBox.classList.remove('hidden');
+        if (previewBox) previewBox.classList.add('hidden');
+        if (btnDiff) btnDiff.className = 'font-bold text-amber-800 dark:text-amber-300 underline cursor-pointer';
+        if (btnPrev) btnPrev.className = 'text-neutral-500 hover:underline cursor-pointer';
+      } else {
+        if (diffBox) diffBox.classList.add('hidden');
+        if (previewBox) previewBox.classList.remove('hidden');
+        if (btnDiff) btnDiff.className = 'text-neutral-500 hover:underline cursor-pointer';
+        if (btnPrev) btnPrev.className = 'font-bold text-amber-800 dark:text-amber-300 underline cursor-pointer';
+      }
+    }
+
+    function computeLineDiff(oldText, newText) {
+      const oldLines = (oldText || '').split(/\r?\n/);
+      const newLines = (newText || '').split(/\r?\n/);
+      const m = oldLines.length;
+      const n = newLines.length;
+
+      // Dynamic programming LCS table
+      const dp = Array.from({ length: m + 1 }, () => new Uint16Array(n + 1));
+      for (let i = 1; i <= m; i++) {
+        for (let j = 1; j <= n; j++) {
+          if (oldLines[i - 1] === newLines[j - 1]) {
+            dp[i][j] = dp[i - 1][j - 1] + 1;
+          } else {
+            dp[i][j] = Math.max(dp[i - 1][j], dp[i][j - 1]);
+          }
+        }
+      }
+
+      // Backtracking
+      let i = m;
+      let j = n;
+      const result = [];
+
+      while (i > 0 || j > 0) {
+        if (i > 0 && j > 0 && oldLines[i - 1] === newLines[j - 1]) {
+          result.push({ type: 'equal', line: oldLines[i - 1], oldNum: i, newNum: j });
+          i--;
+          j--;
+        } else if (j > 0 && (i === 0 || dp[i][j - 1] >= dp[i - 1][j])) {
+          result.push({ type: 'added', line: newLines[j - 1], oldNum: null, newNum: j });
+          j--;
+        } else if (i > 0 && (j === 0 || dp[i][j - 1] < dp[i - 1][j])) {
+          result.push({ type: 'removed', line: oldLines[i - 1], oldNum: i, newNum: null });
+          i--;
+        }
+      }
+
+      return result.reverse();
+    }
+
+    function renderProposalDiff(card) {
+      const proposal = card.pending_proposal;
+      if (!proposal) return;
+
+      const oldText = card.markdown_content || generateStandardMarkdown(card);
+      const newText = proposal.proposed_markdown || '';
+      const diff = computeLineDiff(oldText, newText);
+
+      let addedCount = 0;
+      let removedCount = 0;
+      diff.forEach(item => {
+        if (item.type === 'added') addedCount++;
+        else if (item.type === 'removed') removedCount++;
+      });
+
+      const statsBadge = document.getElementById('diff-stats-badge');
+      if (statsBadge) {
+        statsBadge.innerHTML = `<span class="text-emerald-600 dark:text-emerald-400 font-bold">+${addedCount}</span> / <span class="text-rose-600 dark:text-rose-400 font-bold">-${removedCount}</span> 줄 변경`;
+      }
+
+      // Fact Guard Alert Box & Chip Population
+      const factReport = proposal.fact_report || null;
+      const unverifiedList = (factReport && Array.isArray(factReport.unverified)) ? factReport.unverified : [];
+      const factBox = document.getElementById('doc-proposal-factguard-box');
+      const factMsg = document.getElementById('doc-factguard-msg');
+      const factChips = document.getElementById('doc-factguard-chips');
+
+      if (unverifiedList.length > 0) {
+        if (factBox) factBox.classList.remove('hidden');
+        if (factMsg) {
+          factMsg.innerText = factReport.warning_message || '원문에 명시되지 않은 수치가 제안문에 포함되어 있습니다.';
+        }
+        if (factChips) {
+          factChips.innerHTML = unverifiedList.map(num => `
+            <span class="inline-flex items-center px-2 py-0.5 rounded-full bg-rose-100 dark:bg-rose-900/60 text-rose-800 dark:text-rose-200 border border-rose-300 dark:border-rose-800 text-[10px] font-mono font-bold">
+              ⚠️ ${escapeHtml(num)} (원문 미확인)
+            </span>
+          `).join('');
+        }
+      } else {
+        if (factBox) factBox.classList.add('hidden');
+      }
+
+      const wrapper = document.getElementById('doc-diff-lines-wrapper');
+      if (!wrapper) return;
+
+      // Populate Diff Lines
+      const linesHtml = diff.map(item => {
+        const rawLine = item.line;
+        let safeLine = escapeHtml(rawLine);
+
+        // Highlight unverified tokens in added lines
+        if (item.type === 'added' && unverifiedList.length > 0) {
+          for (const num of unverifiedList) {
+            if (!num) continue;
+            const escNum = escapeHtml(num);
+            safeLine = safeLine.split(escNum).join(`<mark class="bg-rose-200 dark:bg-rose-900/70 text-rose-900 dark:text-rose-100 font-bold px-1 py-0.2 rounded border border-rose-400/80" title="Fact Guard: 원문에 없는 수치">${escNum}</mark>`);
+          }
+        }
+
+        if (item.type === 'added') {
+          return `
+            <div class="flex items-start font-mono text-xs py-0.5 px-2 bg-emerald-50/80 dark:bg-emerald-950/40 text-emerald-900 dark:text-emerald-200 border-l-2 border-emerald-500 rounded-r">
+              <span class="w-8 select-none text-neutral-400 text-right pr-2 text-[10px] leading-5"></span>
+              <span class="w-8 select-none text-emerald-600 dark:text-emerald-400 text-right pr-2 text-[10px] leading-5 font-semibold">${item.newNum}</span>
+              <span class="w-4 select-none text-emerald-600 font-bold text-center leading-5">+</span>
+              <span class="flex-1 whitespace-pre-wrap leading-5 pl-1">${safeLine || ' '}</span>
+            </div>
+          `;
+        } else if (item.type === 'removed') {
+          return `
+            <div class="flex items-start font-mono text-xs py-0.5 px-2 bg-rose-50/80 dark:bg-rose-950/40 text-rose-900 dark:text-rose-200 border-l-2 border-rose-500 rounded-r">
+              <span class="w-8 select-none text-rose-600 dark:text-rose-400 text-right pr-2 text-[10px] leading-5 font-semibold">${item.oldNum}</span>
+              <span class="w-8 select-none text-neutral-400 text-right pr-2 text-[10px] leading-5"></span>
+              <span class="w-4 select-none text-rose-600 font-bold text-center leading-5">-</span>
+              <span class="flex-1 whitespace-pre-wrap leading-5 pl-1 line-through opacity-75">${safeLine || ' '}</span>
+            </div>
+          `;
+        } else {
+          return `
+            <div class="flex items-start font-mono text-xs py-0.5 px-2 text-neutral-500 dark:text-zinc-400 hover:bg-neutral-50 dark:hover:bg-zinc-800/40">
+              <span class="w-8 select-none text-neutral-400 text-right pr-2 text-[10px] leading-5">${item.oldNum}</span>
+              <span class="w-8 select-none text-neutral-400 text-right pr-2 text-[10px] leading-5">${item.newNum}</span>
+              <span class="w-4 select-none text-transparent text-center leading-5"> </span>
+              <span class="flex-1 whitespace-pre-wrap leading-5 pl-1">${safeLine || ' '}</span>
+            </div>
+          `;
+        }
+      }).join('');
+
+      wrapper.innerHTML = linesHtml;
+      toggleProposalDiffDisplay(isProposalDiffMode);
+    }
+
     function renderActiveCard(index) {
-      if (index < 0 || index >= initialCards.length) index = 0;
-      currentCardIndex = index;
-      const card = initialCards[index];
-      if (!card) return;
+      if (typeof index === 'number' && index >= 0 && index < initialCards.length) {
+        currentCardIndex = index;
+      }
+      const card = (currentCardIndex >= 0) ? initialCards[currentCardIndex] : null;
+
+      const closedStateEl = document.getElementById('card-closed-state');
+      const singleContainer = document.getElementById('single-view-container');
+      const splitContainer = document.getElementById('compare-split-container');
+      const inspectorPanel = document.getElementById('inspector-panel');
+      const resizerInspector = document.getElementById('resizer-inspector');
+      const openInspectorBtn = document.getElementById('btn-open-inspector');
+      const btnCloseCard = document.getElementById('btn-close-card');
+      const viewModeGroup = document.getElementById('view-mode-toggle-group');
+      const btnCommit = document.getElementById('btn-db-commit');
+      const btnDiscard = document.getElementById('btn-discard-card');
+      const btnCompare = document.getElementById('btn-toggle-compare');
+
+      const saveStatusBadge = document.getElementById('doc-save-status-badge');
+      const saveStatusDot = document.getElementById('doc-save-status-dot');
+      const saveStatusText = document.getElementById('doc-save-status-text');
+
+      if (!isCardOpen || !card) {
+        if (closedStateEl) closedStateEl.classList.remove('hidden');
+        if (singleContainer) singleContainer.classList.add('hidden');
+        if (splitContainer) splitContainer.classList.add('hidden');
+        if (inspectorPanel) inspectorPanel.classList.add('hidden');
+        if (resizerInspector) resizerInspector.classList.add('hidden');
+        if (openInspectorBtn) openInspectorBtn.classList.add('hidden');
+        if (saveStatusBadge) saveStatusBadge.classList.add('hidden');
+        if (btnCloseCard) btnCloseCard.classList.add('opacity-30', 'pointer-events-none');
+        if (viewModeGroup) viewModeGroup.classList.add('opacity-30', 'pointer-events-none');
+        if (btnCommit) btnCommit.classList.add('opacity-30', 'pointer-events-none');
+        if (btnDiscard) btnDiscard.classList.add('opacity-30', 'pointer-events-none');
+        if (btnCompare) btnCompare.classList.add('opacity-30', 'pointer-events-none');
+
+        const titleEl = document.getElementById('doc-title');
+        if (titleEl) titleEl.innerText = '선택된 카드가 없습니다';
+        const filenameEl = document.getElementById('doc-filename');
+        if (filenameEl) filenameEl.innerText = '대기열에서 선택';
+        const metaIdEl = document.getElementById('doc-meta-id');
+        if (metaIdEl) metaIdEl.innerText = '대기열에서 카드를 선택하세요';
+        const stageBadge = document.getElementById('doc-stage-badge');
+        if (stageBadge) {
+          stageBadge.innerText = '카드 미선택';
+          stageBadge.className = 'text-neutral-400 font-medium text-[11px] truncate whitespace-nowrap hidden md:inline';
+        }
+        return;
+      }
+
+      if (closedStateEl) closedStateEl.classList.add('hidden');
+      // When card is opened, reveal the right Antigravity Copilot panel
+      if (inspectorPanel) inspectorPanel.classList.remove('hidden');
+      if (resizerInspector) resizerInspector.classList.remove('hidden');
+      if (openInspectorBtn) openInspectorBtn.classList.add('hidden');
+      if (saveStatusBadge) saveStatusBadge.classList.remove('hidden');
+      if (btnCloseCard) btnCloseCard.classList.remove('opacity-30', 'pointer-events-none');
+      if (viewModeGroup) viewModeGroup.classList.remove('opacity-30', 'pointer-events-none');
+      if (btnCommit) btnCommit.classList.remove('opacity-30', 'pointer-events-none');
+      if (btnDiscard) btnDiscard.classList.remove('opacity-30', 'pointer-events-none');
+      if (btnCompare) btnCompare.classList.remove('opacity-30', 'pointer-events-none');
 
       // 1. Center Header Elements
       const titleEl = document.getElementById('doc-title');
@@ -3011,19 +3743,22 @@ ${card.synthesis || ""}
         }
       }
 
-      // 2. Commit Button State (Concise: Save / Saved)
-      const btnCommit = document.getElementById('btn-db-commit');
+      // 2. Commit Button & Status Badge State
       const btnCommitText = document.getElementById('btn-db-commit-text');
       if (card.status === 'COMMITTED') {
-        if (btnCommit) {
-          btnCommit.className = 'px-3 py-1 text-xs font-medium bg-emerald-600 text-white rounded-lg transition-colors flex items-center space-x-1.5 shadow-sm';
+        if (btnCommitText) btnCommitText.innerText = 'Saved to Vault ✓';
+        if (saveStatusBadge) {
+          saveStatusBadge.className = 'inline-flex items-center space-x-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border border-emerald-200/60 dark:border-emerald-800/60';
         }
-        if (btnCommitText) btnCommitText.innerText = 'Saved';
+        if (saveStatusDot) saveStatusDot.className = 'w-1.5 h-1.5 rounded-full bg-emerald-500';
+        if (saveStatusText) saveStatusText.innerText = 'Saved';
       } else {
-        if (btnCommit) {
-          btnCommit.className = 'px-3 py-1 text-xs font-medium bg-neutral-900 text-white rounded-lg hover:bg-neutral-800 transition-colors flex items-center space-x-1.5 shadow-sm';
+        if (btnCommitText) btnCommitText.innerText = 'Save to Vault';
+        if (saveStatusBadge) {
+          saveStatusBadge.className = 'inline-flex items-center space-x-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-neutral-100 dark:bg-zinc-800/80 text-neutral-600 dark:text-zinc-400 border border-neutral-200/60 dark:border-zinc-700/60';
         }
-        if (btnCommitText) btnCommitText.innerText = 'Save';
+        if (saveStatusDot) saveStatusDot.className = 'w-1.5 h-1.5 rounded-full bg-amber-400';
+        if (saveStatusText) saveStatusText.innerText = 'Draft';
       }
 
       // Hide Post-Commit Reflection box on card switch
@@ -3039,22 +3774,34 @@ ${card.synthesis || ""}
         tagContainer.innerHTML = tagsHtml;
       }
 
-      // 4. Update Compare Button & Render Content Canvas (Single vs Split Compare)
-      const btnCompare = document.getElementById('btn-toggle-compare');
+      // 4. Update Compare Button & View Checks
       const digest = getCardStructuredDigest(card);
+      const checkCompare = document.getElementById('check-view-compare');
+      const compareText = document.getElementById('btn-compare-text');
+      const checkPreview = document.getElementById('check-view-preview');
+      const checkEdit = document.getElementById('check-view-edit');
+
+      if (checkPreview) {
+        checkPreview.className = currentDocViewMode === 'preview' ? 'w-3.5 text-indigo-600 dark:text-indigo-400 font-bold' : 'w-3.5 text-transparent font-bold';
+      }
+      if (checkEdit) {
+        checkEdit.className = currentDocViewMode === 'edit' ? 'w-3.5 text-indigo-600 dark:text-indigo-400 font-bold' : 'w-3.5 text-transparent font-bold';
+      }
+
       if (btnCompare) {
         if (!digest.source_article || !digest.source_article.url || digest.source_article.url.startsWith('internal')) {
           btnCompare.title = '원문 링크 없는 단문/음성 메모';
+          btnCompare.classList.add('opacity-40', 'cursor-not-allowed');
         } else {
           btnCompare.title = '원문 대조 비교 모드 (단축키: C)';
+          btnCompare.classList.remove('opacity-40', 'cursor-not-allowed');
         }
-        if (isCompareMode) {
-          btnCompare.className = 'px-2.5 py-1 text-xs font-semibold bg-indigo-600 text-white border border-indigo-600 rounded-lg shadow-xs flex items-center space-x-1 flex-shrink-0 whitespace-nowrap';
-          btnCompare.innerHTML = '<span>⇄ Compare (ON)</span>';
-        } else {
-          btnCompare.className = 'px-2.5 py-1 text-xs font-medium border border-neutral-200 dark:border-zinc-700 text-neutral-700 dark:text-zinc-300 rounded-lg hover:bg-neutral-100 dark:hover:bg-zinc-800 transition-colors flex items-center space-x-1 flex-shrink-0 whitespace-nowrap';
-          btnCompare.innerHTML = '<span>⇄ Compare</span>';
-        }
+      }
+      if (checkCompare) {
+        checkCompare.className = isCompareMode ? 'w-3.5 text-indigo-600 dark:text-indigo-400 font-bold' : 'w-3.5 text-transparent font-bold';
+      }
+      if (compareText) {
+        compareText.innerText = isCompareMode ? '⇄ Compare Original (ON)' : '⇄ Compare Original';
       }
 
       const rawContent = card.markdown_content || generateStandardMarkdown(card);
@@ -3075,9 +3822,6 @@ ${card.synthesis || ""}
         }
       }
 
-      const singleContainer = document.getElementById('single-view-container');
-      const splitContainer = document.getElementById('compare-split-container');
-
       if (isCompareMode) {
         if (singleContainer) singleContainer.classList.add('hidden');
         if (splitContainer) splitContainer.classList.remove('hidden');
@@ -3090,6 +3834,21 @@ ${card.synthesis || ""}
         const previewContainer = document.getElementById('doc-preview-container');
         if (previewContainer) {
           previewContainer.innerHTML = renderObsidianMarkdown(rawContent, card);
+        }
+
+        // Proposal Banner & Diff Handling
+        const proposalBanner = document.getElementById('doc-proposal-banner');
+        const diffContainer = document.getElementById('doc-diff-container');
+
+        if (card.pending_proposal) {
+          if (proposalBanner) proposalBanner.classList.remove('hidden');
+          renderProposalDiff(card);
+        } else {
+          if (proposalBanner) proposalBanner.classList.add('hidden');
+          if (diffContainer) diffContainer.classList.add('hidden');
+          if (previewContainer && currentDocViewMode === 'preview') {
+            previewContainer.classList.remove('hidden');
+          }
         }
       }
 
@@ -3189,16 +3948,32 @@ ${card.synthesis || ""}
         }
       }
 
-      // 6. Copilot Clean Pill & Skill Popover Items
+      // 6. Copilot Antigravity Panel & Skill Popover Items
       const copilotCardId = document.getElementById('copilot-card-id');
       if (copilotCardId) copilotCardId.innerText = `#${card.id}`;
 
       const copilotInput = document.getElementById('copilot-input');
       if (copilotInput) {
-        copilotInput.placeholder = card.suggestedPrompt || '이 문서 컨텍스트로 질문하거나 수정을 지시하세요...';
+        copilotInput.placeholder = card.suggestedPrompt || 'Ask anything, @ to mention, / for actions (수정 지시 또는 질문)...';
+      }
+
+      const vaultPathEl = document.getElementById('copilot-vault-path-text');
+      if (vaultPathEl) {
+        vaultPathEl.innerText = '~/Desktop/구직/경험정리/' + (card.filename || card.title + '.md');
+        vaultPathEl.title = '/Users/grasshop/Desktop/구직/경험정리/' + (card.filename || card.title + '.md');
+      }
+
+      const tabScorePill = document.getElementById('inspector-tab-score-pill');
+      if (tabScorePill && card.integrity) {
+        tabScorePill.innerText = `${Math.round(card.integrity.score)}%`;
+        tabScorePill.className = card.integrity.score >= 95 
+          ? 'text-[10px] font-mono text-emerald-600 dark:text-emerald-400 font-bold'
+          : 'text-[10px] font-mono text-amber-600 dark:text-amber-400 font-bold';
       }
 
       renderSkillDropdown(card);
+      renderCardChatHistory(card);
+      switchCopilotTab('chat');
     }
 
     // Filter and Search State (Inbox Zero Default: 'pending')
@@ -3317,9 +4092,9 @@ ${card.synthesis || ""}
       }
 
       // Only auto-switch active card if explicitly requested (e.g. user switched filter tab or cleared search)
-      const activeCard = initialCards[currentCardIndex];
+      const activeCard = (currentCardIndex >= 0) ? initialCards[currentCardIndex] : null;
       const isCurrentInFiltered = filtered.some(c => c.id === activeCard?.id);
-      if (autoSelect && !isCurrentInFiltered && filtered.length > 0) {
+      if (isCardOpen && autoSelect && !isCurrentInFiltered && filtered.length > 0) {
         const newTargetIdx = initialCards.findIndex(c => c.id === filtered[0].id);
         if (newTargetIdx !== -1) {
           currentCardIndex = newTargetIdx;
@@ -3329,7 +4104,7 @@ ${card.synthesis || ""}
 
       queueContainer.innerHTML = filtered.map((card) => {
         const realIdx = initialCards.findIndex(c => c.id === card.id);
-        const isActive = realIdx === currentCardIndex;
+        const isActive = isCardOpen && (realIdx === currentCardIndex);
         
         let statusDot = 'bg-blue-500';
         let statusText = '대기';
@@ -3476,7 +4251,21 @@ ${card.synthesis || ""}
         const found = initialCards.findIndex(c => c.id === cardKey || `card-${c.id}` === cardKey);
         if (found !== -1) idx = found;
       }
+      isCardOpen = true;
       renderActiveCard(idx);
+      renderQueue();
+    }
+
+    function openCard(index) {
+      isCardOpen = true;
+      const targetIdx = (typeof index === 'number' && index >= 0) ? index : (currentCardIndex >= 0 ? currentCardIndex : 0);
+      selectCard(targetIdx);
+    }
+
+    function closeActiveCard() {
+      isCardOpen = false;
+      currentCardIndex = -1;
+      renderActiveCard(-1);
       renderQueue();
     }
 
@@ -3500,6 +4289,8 @@ ${card.synthesis || ""}
         } else if (e.key === 'Enter' && !e.shiftKey) {
           e.preventDefault();
           sendCopilotMessage();
+        } else if (e.key === 'Escape') {
+          input.blur();
         }
       });
     }
@@ -3596,19 +4387,12 @@ ${card.synthesis || ""}
       if (rawEl) rawEl.innerText = newContent;
 
       const syncPill = document.getElementById('editor-sync-pill');
-      const nowTime = new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
       if (syncPill) {
-        syncPill.innerText = `✓ 디스크 동기화 완료 (${nowTime})`;
-        syncPill.className = 'text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 font-semibold';
+        syncPill.innerText = '저장 요청 중...';
+        syncPill.className = 'text-[10px] font-mono px-2 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200 font-semibold animate-pulse';
       }
 
-      // Keep button state responsive
-      const btnCommitText = document.getElementById('btn-db-commit-text');
-      if (btnCommitText && card.status === 'COMMITTED') {
-        btnCommitText.innerText = '✓ 볼트 저장 완료';
-      }
-
-      // DO NOT auto-switch active card! User is looking at and editing this card.
+      updateSaveStatusUI('pending');
       renderQueue(false);
 
       if (ws && ws.readyState === WebSocket.OPEN) {
@@ -3616,11 +4400,12 @@ ${card.synthesis || ""}
           type: 'SAVE_CARD_CONTENT',
           task_id: card.id,
           filename: filename,
-          markdown_content: newContent
+          markdown_content: newContent,
+          base_hash: card.base_hash || ''
         }));
+      } else {
+        showToast('데몬 오프라인', '백엔드 데몬(8765)에 연결되지 않아 로컬 브라우저에만 임시 보존되었습니다.', 'warning');
       }
-
-      showToast('디스크 실시간 동기화', `'${filename}' 파일이 Mac 로컬 볼트에 즉시 저장되었습니다.`, 'success');
     }
 
     function commitActiveCard() {
@@ -3632,19 +4417,7 @@ ${card.synthesis || ""}
       const filename = card.filename || `${card.title}.md`;
       const content = card.markdown_content || card.synthesis || '';
 
-      const btnCommitText = document.getElementById('btn-db-commit-text');
-      const btnCommit = document.getElementById('btn-db-commit');
-      if (btnCommitText) btnCommitText.innerText = 'Saved';
-      if (btnCommit) {
-        btnCommit.className = 'px-3 py-1 text-xs font-medium bg-emerald-600 text-white rounded-lg transition-colors flex items-center space-x-1.5 shadow-sm';
-      }
-
-      // 즉각적 상태 업데이트 및 로컬 저장
-      card.status = 'COMMITTED';
-      card.warning = null;
-      if (card.integrity) card.integrity.score = 100.0;
-      saveCardsLocally();
-      renderQueue();
+      updateSaveStatusUI('pending');
 
       // Show Post-Commit 1-Line Reflection Bar (비침해적 1줄 회고 트리거)
       const reflectionBox = document.getElementById('post-commit-reflection-box');
@@ -3663,8 +4436,6 @@ ${card.synthesis || ""}
         }
       }
 
-      showToast('볼트 저장 완료', `'${filename}' 파일이 옵시디언 볼트에 저장되었습니다.`, 'success');
-
       if (ws && ws.readyState === WebSocket.OPEN) {
         ws.send(JSON.stringify({
           type: 'COMMIT_CARD',
@@ -3673,10 +4444,218 @@ ${card.synthesis || ""}
           filename: filename,
           content: content,
           markdown_content: card.markdown_content || '',
+          base_hash: card.base_hash || '',
           wikilinks: card.wikilinks || [],
           tags: card.tags || []
         }));
+      } else {
+        showToast('데몬 오프라인', '백엔드 데몬에 연결되지 않았습니다. 데몬(8765)을 실행해주세요.', 'warning');
       }
+    }
+
+    let isChatPanelOpen = true;
+
+    function toggleCopilotChatPanel(forceOpen) {
+      toggleInspector(forceOpen);
+      switchCopilotTab('chat');
+    }
+
+    let currentCopilotTab = 'chat';
+
+    function switchCopilotTab(tab) {
+      currentCopilotTab = tab;
+      const chatView = document.getElementById('view-copilot-chat');
+      const inspectorView = document.getElementById('view-copilot-inspector');
+      const chatBtn = document.getElementById('tab-btn-copilot-chat');
+      const inspectorBtn = document.getElementById('tab-btn-copilot-inspector');
+
+      if (tab === 'chat') {
+        if (chatView) chatView.classList.remove('hidden');
+        if (inspectorView) inspectorView.classList.add('hidden');
+        if (chatBtn) {
+          chatBtn.className = 'px-2.5 py-1 rounded-md font-semibold bg-white dark:bg-zinc-700 text-neutral-900 dark:text-zinc-100 shadow-2xs transition-all flex items-center gap-1.5 cursor-pointer';
+        }
+        if (inspectorBtn) {
+          inspectorBtn.className = 'px-2.5 py-1 rounded-md text-neutral-600 dark:text-zinc-400 hover:text-neutral-900 dark:hover:text-zinc-200 transition-all flex items-center gap-1 cursor-pointer';
+        }
+        const container = document.getElementById('copilot-messages-container');
+        if (container) container.scrollTop = container.scrollHeight;
+      } else {
+        if (chatView) chatView.classList.add('hidden');
+        if (inspectorView) inspectorView.classList.remove('hidden');
+        if (chatBtn) {
+          chatBtn.className = 'px-2.5 py-1 rounded-md text-neutral-600 dark:text-zinc-400 hover:text-neutral-900 dark:hover:text-zinc-200 transition-all flex items-center gap-1.5 cursor-pointer';
+        }
+        if (inspectorBtn) {
+          inspectorBtn.className = 'px-2.5 py-1 rounded-md font-semibold bg-white dark:bg-zinc-700 text-neutral-900 dark:text-zinc-100 shadow-2xs transition-all flex items-center gap-1 cursor-pointer';
+        }
+      }
+    }
+
+    function escapeHtml(str) {
+      if (!str) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    function renderCardChatHistory(card) {
+      if (!card) card = (currentCardIndex >= 0) ? initialCards[currentCardIndex] : null;
+      if (!card) return;
+      if (!card.chatHistory) card.chatHistory = [];
+
+      const countBadge = document.getElementById('copilot-chat-count-badge');
+      const container = document.getElementById('copilot-messages-container');
+
+      const turns = card.chatHistory.filter(m => m.role === 'user').length;
+      if (countBadge) {
+        countBadge.innerText = `${turns}턴`;
+      }
+
+      if (!container) return;
+
+      if (card.chatHistory.length === 0) {
+        container.innerHTML = `
+          <div class="py-10 text-center space-y-3 select-none px-4">
+            <div class="w-10 h-10 rounded-2xl bg-indigo-50 dark:bg-zinc-800 text-indigo-600 dark:text-indigo-400 mx-auto flex items-center justify-center text-lg font-bold shadow-xs">
+              ✦
+            </div>
+            <div class="space-y-1">
+              <div class="text-xs font-semibold text-neutral-800 dark:text-zinc-200">
+                SUBrain Copilot Agent
+              </div>
+              <div class="text-[11px] text-neutral-500 dark:text-zinc-400 max-w-xs mx-auto leading-relaxed">
+                현재 지식 카드를 읽고 함께 분석하거나, 수정 지시를 내려 마크다운 문서를 직접 갱신할 수 있습니다.
+              </div>
+            </div>
+            <div class="pt-2 flex flex-col gap-1.5 max-w-xs mx-auto text-left">
+              <button onclick="injectPrompt('핵심 실행 원칙 3가지를 도출해서 본문에 추가해줘')" class="px-3 py-2 rounded-xl bg-neutral-100/80 dark:bg-zinc-800/80 hover:bg-neutral-200 dark:hover:bg-zinc-700 text-neutral-700 dark:text-zinc-300 text-[11px] transition-colors border border-neutral-200/60 dark:border-zinc-700 cursor-pointer flex items-center gap-2">
+                <span class="text-amber-500 font-bold">⚡</span>
+                <span class="truncate">핵심 실행 원칙 3가지 도출 및 반영</span>
+              </button>
+              <button onclick="injectPrompt('3C4P 성과 지표를 더 구체적인 숫자로 보강해줘')" class="px-3 py-2 rounded-xl bg-neutral-100/80 dark:bg-zinc-800/80 hover:bg-neutral-200 dark:hover:bg-zinc-700 text-neutral-700 dark:text-zinc-300 text-[11px] transition-colors border border-neutral-200/60 dark:border-zinc-700 cursor-pointer flex items-center gap-2">
+                <span class="text-indigo-500 font-bold">📊</span>
+                <span class="truncate">3C4P 정량 지표 보강하기</span>
+              </button>
+              <button onclick="injectPrompt('한 줄 요약과 인과 사슬을 더 선명하게 다듬어줘')" class="px-3 py-2 rounded-xl bg-neutral-100/80 dark:bg-zinc-800/80 hover:bg-neutral-200 dark:hover:bg-zinc-700 text-neutral-700 dark:text-zinc-300 text-[11px] transition-colors border border-neutral-200/60 dark:border-zinc-700 cursor-pointer flex items-center gap-2">
+                <span class="text-emerald-500 font-bold">✨</span>
+                <span class="truncate">한 줄 요약 및 인과 사슬 정제</span>
+              </button>
+            </div>
+          </div>
+        `;
+        return;
+      }
+
+      container.innerHTML = card.chatHistory.map((msg) => {
+        if (msg.role === 'user') {
+          return `
+            <div class="flex justify-end items-start space-x-2">
+              <div class="max-w-[85%] bg-neutral-900 dark:bg-zinc-100 text-white dark:text-zinc-900 rounded-2xl rounded-tr-xs px-3.5 py-2.5 shadow-xs space-y-1">
+                <div class="flex items-center justify-between gap-4 text-[10px] opacity-70 pb-0.5 border-b border-white/10 dark:border-black/10">
+                  <span class="font-medium">👤 나</span>
+                  <span class="font-mono">${msg.timestamp || ''}</span>
+                </div>
+                <div class="text-xs leading-relaxed font-sans whitespace-pre-wrap select-text">${escapeHtml(msg.content)}</div>
+              </div>
+            </div>
+          `;
+        } else {
+          const parsedContent = typeof marked !== 'undefined' ? marked.parse(msg.content) : escapeHtml(msg.content);
+          return `
+            <div class="flex justify-start items-start space-x-2">
+              <div class="max-w-[95%] w-full bg-white dark:bg-zinc-900 border border-neutral-200/90 dark:border-zinc-800 rounded-2xl rounded-tl-xs p-3.5 shadow-xs space-y-2 select-text">
+                <div class="flex items-center justify-between text-[11px] pb-1.5 border-b border-neutral-100 dark:border-zinc-800">
+                  <div class="flex items-center space-x-2">
+                    <div class="w-5 h-5 rounded-md bg-indigo-500/10 dark:bg-indigo-400/20 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-bold text-xs">✦</div>
+                    <span class="font-semibold text-neutral-800 dark:text-zinc-200">AI Copilot</span>
+                  </div>
+                  <span class="text-[10px] font-mono text-neutral-400 dark:text-zinc-500">${msg.timestamp || ''}</span>
+                </div>
+
+                <div class="prose prose-xs dark:prose-invert max-w-none text-neutral-800 dark:text-zinc-200 leading-relaxed font-sans text-xs">
+                  ${parsedContent}
+                </div>
+                ${msg.is_modification && msg.proposed_markdown ? `
+                  <div class="mt-2.5 p-2.5 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 text-xs space-y-2">
+                    <div class="flex items-center justify-between text-amber-800 dark:text-amber-300 font-semibold text-[11px]">
+                      <div class="flex items-center space-x-1.5">
+                        <span>📝</span>
+                        <span>본문 수정 제안 (검토 대기)</span>
+                      </div>
+                      <span class="font-mono text-[10px] text-amber-600 dark:text-amber-400">Proposal</span>
+                    </div>
+                    <div class="text-[11px] text-neutral-600 dark:text-zinc-400 leading-normal">
+                      AI가 작성한 수정안을 검토한 뒤 승인하면 에디터에 반영되고 로컬 옵시디언 볼트에 안전하게 영구 저장됩니다. (좌측 캔버스에서 Diff 확인 가능)
+                    </div>
+                    ${msg.fact_report && !msg.fact_report.is_clean ? `
+                      <div class="p-2 rounded-lg bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/60 text-[11px] text-rose-700 dark:text-rose-300 space-y-1">
+                        <div class="font-semibold flex items-center space-x-1">
+                          <span>⚠️ Fact Guard 경고</span>
+                        </div>
+                        <div class="text-[10px] text-rose-600 dark:text-rose-400">
+                          원문에 명시되지 않은 수치: <strong>${(msg.fact_report.unverified || []).join(', ')}</strong>
+                        </div>
+                      </div>
+                    ` : ''}
+                    <div class="flex items-center space-x-2 pt-1">
+                      <button onclick="applyCopilotProposal('${card.id}', '${msg.proposal_id || ''}')" class="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-medium text-xs shadow-xs transition-colors flex items-center space-x-1 cursor-pointer">
+                        <span>✓</span>
+                        <span>제안 적용 및 볼트 저장</span>
+                      </button>
+                      <button onclick="dismissCopilotProposal('${card.id}', '${msg.proposal_id || ''}')" class="px-2.5 py-1.5 rounded-lg border border-neutral-300 dark:border-zinc-700 hover:bg-neutral-100 dark:hover:bg-zinc-800 text-neutral-700 dark:text-zinc-300 text-xs transition-colors cursor-pointer">
+                        <span>취소</span>
+                      </button>
+                    </div>
+                  </div>
+                ` : ''}
+              </div>
+            </div>
+          `;
+        }
+      }).join('');
+
+      container.scrollTop = container.scrollHeight;
+    }
+
+    function appendCopilotThinkingBubble() {
+      const container = document.getElementById('copilot-messages-container');
+      if (!container) return;
+      const existing = document.getElementById('copilot-thinking-bubble');
+      if (existing) existing.remove();
+
+      const bubble = document.createElement('div');
+      bubble.id = 'copilot-thinking-bubble';
+      bubble.className = 'flex justify-start items-start space-x-2';
+      bubble.innerHTML = `
+        <div class="bg-neutral-100 dark:bg-zinc-800 text-neutral-700 dark:text-zinc-300 rounded-2xl rounded-tl-xs px-4 py-2.5 shadow-xs flex items-center space-x-2 text-xs">
+          <svg class="animate-spin h-3.5 w-3.5 flex-shrink-0 text-indigo-600 dark:text-indigo-400" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path></svg>
+          <span class="font-medium">답변을 작성하고 문서를 교정하는 중...</span>
+        </div>
+      `;
+      container.appendChild(bubble);
+      container.scrollTop = container.scrollHeight;
+    }
+
+    function removeCopilotThinkingBubble() {
+      const bubble = document.getElementById('copilot-thinking-bubble');
+      if (bubble) bubble.remove();
+    }
+
+    function clearActiveCardChat() {
+      const card = (currentCardIndex >= 0) ? initialCards[currentCardIndex] : null;
+      if (!card) return;
+      if (!card.chatHistory || card.chatHistory.length === 0) {
+        showToast('안내', '초기화할 대화 기록이 없습니다.', 'info');
+        return;
+      }
+      card.chatHistory = [];
+      saveCardsLocally();
+      renderCardChatHistory(card);
+      showToast('대화 초기화', '이 카드의 대화 기록이 초기화되었습니다.', 'info');
     }
 
     function sendCopilotMessage() {
@@ -3684,24 +4663,113 @@ ${card.synthesis || ""}
       const prompt = input.value.trim();
       if (!prompt) return;
 
-      const card = initialCards[currentCardIndex] || initialCards[0];
-      const synthesis = card.synthesis || '';
+      const card = (currentCardIndex >= 0) ? initialCards[currentCardIndex] : null;
+      if (!card) {
+        showToast('안내', '먼저 대기열에서 카드를 선택하세요.', 'info');
+        return;
+      }
+      if (!card.chatHistory) card.chatHistory = [];
 
-      if (!ws || ws.readyState !== WebSocket.OPEN) {
-        showToast('오프라인', '백엔드 데몬과 연결되어 있지 않습니다.', 'error');
+      toggleInspector(true);
+      switchCopilotTab('chat');
+
+      const nowStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      card.chatHistory.push({
+        role: 'user',
+        content: prompt,
+        timestamp: nowStr
+      });
+
+      input.value = '';
+      saveCardsLocally();
+      renderCardChatHistory(card);
+      appendCopilotThinkingBubble();
+
+      const editor = document.getElementById('doc-markdown-editor');
+      const currentMarkdown = (currentDocViewMode === 'edit' && editor && editor.value)
+        ? editor.value
+        : (card.markdown_content || generateStandardMarkdown(card));
+
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({
+          type: 'EXECUTE_COPILOT',
+          task_id: card.id,
+          title: card.title,
+          filename: card.filename || `${card.title}.md`,
+          markdown_content: currentMarkdown,
+          synthesis: card.synthesis || '',
+          prompt: prompt,
+          history: card.chatHistory.slice(0, -1)
+        }));
+      } else {
+        simulateLocalCopilotExecution(card, prompt);
+      }
+    }
+
+    function simulateLocalCopilotExecution(card, prompt) {
+      setTimeout(() => {
+        removeCopilotThinkingBubble();
+        const nowStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        card.chatHistory.push({
+          role: 'assistant',
+          content: '⚠️ **오프라인 알림**: 백엔드 데몬(`ws://127.0.0.1:8765`)에 연결되어 있지 않습니다. 실제 AI Copilot 대화 및 볼트 디스크 저장을 수행하려면 데몬을 먼저 실행해주세요.',
+          timestamp: nowStr
+        });
+
+        saveCardsLocally();
+        renderActiveCard(currentCardIndex);
+        renderQueue();
+      }, 300);
+    }
+
+    function applyCopilotProposal(cardId, proposalId) {
+      const card = initialCards.find(c => c.id === cardId) || initialCards[currentCardIndex];
+      if (!card) return;
+      const proposal = card.pending_proposal;
+      if (!proposal) {
+        showToast('안내', '적용할 수정 제안을 찾을 수 없습니다.', 'warning');
         return;
       }
 
-      ws.send(JSON.stringify({
-        type: 'EXECUTE_COPILOT',
-        task_id: card.id,
-        title: card.title,
-        synthesis: synthesis,
-        prompt: prompt
-      }));
+      const editor = document.getElementById('doc-markdown-editor');
+      if (editor) editor.value = proposal.proposed_markdown;
 
-      showToast('AI 코파일럿', `"${prompt}" 지시사항을 반영 중입니다...`, 'info');
-      input.value = '';
+      card.markdown_content = proposal.proposed_markdown;
+      if (proposal.updated_synthesis) {
+        card.synthesis = proposal.updated_synthesis;
+      }
+      card.status = 'COMMITTED';
+      card.warning = null;
+      if (card.integrity) card.integrity.score = 100.0;
+
+      updateSaveStatusUI('pending');
+
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({
+          type: 'APPLY_PROPOSAL',
+          task_id: card.id,
+          filename: card.filename || `${card.title}.md`,
+          markdown_content: proposal.proposed_markdown,
+          base_hash: proposal.base_hash || card.base_hash || '',
+          updated_synthesis: proposal.updated_synthesis || ''
+        }));
+      }
+
+      delete card.pending_proposal;
+      saveCardsLocally();
+      renderActiveCard(currentCardIndex);
+      renderQueue();
+    }
+
+    function dismissCopilotProposal(cardId, proposalId) {
+      const card = initialCards.find(c => c.id === cardId) || initialCards[currentCardIndex];
+      if (card && card.pending_proposal) {
+        delete card.pending_proposal;
+        saveCardsLocally();
+        renderCardChatHistory(card);
+        renderActiveCard(currentCardIndex);
+        showToast('제안 취소됨', 'AI 수정 제안을 취소했습니다.', 'info');
+      }
     }
 
     function applyAutoFix() {
@@ -3712,43 +4780,24 @@ ${card.synthesis || ""}
       }
 
       const warningCode = card.warning.code || '#RESOLVED';
-
-      // 1. 즉각적 낙관적 반영 및 영구 저장
       card.warning = null;
       card.status = 'COMMITTED';
       if (card.integrity) card.integrity.score = 100.0;
-      
-      // 구체적 텍스트 교정
-      if (card.id === 'DOC-2609-01' && card.markdown_content) {
-        card.markdown_content = card.markdown_content.replace(
-          "과거 타사 제출본(70% 시작)과 최신 수정본(40% 시작) 간의 30%p 완수율 지표 충돌을 방어하고, 수강생 불신 해소를 위한 3C4P 데이터 기반 신뢰 회복 과정을 다룸.",
-          "초기 40% 시작점에서 1차 보완 70%, 최종 92% 달성에 이르는 단계적 전환 인과를 정립하고 3C4P 데이터 기반 신뢰 회복 과정을 규격화함."
-        );
-      } else if (card.id === 'DOC-2609-04' && card.markdown_content) {
-        card.markdown_content = card.markdown_content.replace(
-          "패키지 전환 성과 미검증",
-          "런칭 3주 만에 수강생 142명 모집 및 유료 전환율 24.8% 달성 (수익 1,840만 원)"
-        );
-      }
-
-      const editor = document.getElementById('doc-markdown-editor');
-      if (editor) editor.value = card.markdown_content || '';
 
       saveCardsLocally();
       renderActiveCard(currentCardIndex);
       renderQueue();
 
-      // 2. 백엔드 데몬 및 디스크 실시간 양방향 동기화
       if (ws && ws.readyState === WebSocket.OPEN) {
         ws.send(JSON.stringify({
           type: 'APPLY_AUTO_FIX',
           task_id: card.id,
           code: warningCode,
-          markdown_content: card.markdown_content
+          markdown_content: card.markdown_content || ''
         }));
       }
 
-      showToast('자동 교정 완료', '규칙 위반 사항이 자동 교정되어 디스크와 100% 동기화되었습니다.', 'success');
+      showToast('규칙 예외 승인', '경고 항목을 승인 처리하여 무결성 점수가 100%로 갱신되었습니다.', 'success');
     }
 
     function dismissWarning() {
@@ -3787,13 +4836,20 @@ ${card.synthesis || ""}
         e.preventDefault();
         saveActiveCardToDisk();
       }
-      // Cmd+K or Ctrl+K: Global search focus
+      // Cmd+K or Ctrl+K: Focus Copilot Chat Input if card is open, else global search
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault();
-        const searchInput = document.getElementById('global-search-input');
-        if (searchInput) {
-          searchInput.focus();
-          searchInput.select();
+        const copilotInput = document.getElementById('copilot-input');
+        if (copilotInput && isCardOpen) {
+          toggleCopilotChatPanel(true);
+          copilotInput.focus();
+          copilotInput.select();
+        } else {
+          const searchInput = document.getElementById('global-search-input');
+          if (searchInput) {
+            searchInput.focus();
+            searchInput.select();
+          }
         }
       }
       // Cmd+B or Ctrl+B: Toggle Sidebar (Gemini / ChatGPT Style)
@@ -3805,15 +4861,36 @@ ${card.synthesis || ""}
       // Single Key Triage Shortcuts (When not typing in inputs/textareas)
       const isTyping = ['input', 'textarea'].includes(document.activeElement?.tagName?.toLowerCase());
       if (!isTyping && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        // Escape: Close Dropdowns first if open, else Close Card or Return from Compare View
+        if (e.key === 'Escape') {
+          const fontDropdown = document.getElementById('font-switcher-dropdown');
+          if (fontDropdown && !fontDropdown.classList.contains('hidden')) {
+            e.preventDefault();
+            closeFontDropdown();
+            return;
+          }
+          const fileDropdown = document.getElementById('file-menu-dropdown');
+          if (fileDropdown && !fileDropdown.classList.contains('hidden')) {
+            e.preventDefault();
+            closeFileMenu();
+            return;
+          }
+          e.preventDefault();
+          if (isCompareMode) {
+            toggleCompareMode();
+          } else if (isCardOpen) {
+            closeActiveCard();
+          }
+        }
         // C: Toggle Compare Mode
-        if (e.key === 'c' || e.key === 'C') {
+        else if (e.key === 'c' || e.key === 'C') {
           e.preventDefault();
           toggleCompareMode();
         }
-        // D: Open Deep Dive Executive Drawer
-        else if (e.key === 'd' || e.key === 'D') {
+        // Enter: Open active card if closed
+        else if (e.key === 'Enter' && !isCardOpen) {
           e.preventDefault();
-          openExecutiveDrawer(currentCardIndex);
+          openCard(currentCardIndex);
         }
         // Space: Save in Triage / Just Save in Post-Commit Reflection
         else if (e.key === ' ') {
@@ -3821,7 +4898,7 @@ ${card.synthesis || ""}
           if (refBox && !refBox.classList.contains('hidden')) {
             e.preventDefault();
             submitReflection(false); // Just Save
-          } else {
+          } else if (isCardOpen) {
             e.preventDefault();
             commitActiveCard(); // Save
           }
@@ -3870,44 +4947,110 @@ ${card.synthesis || ""}
       if (event.type === 'SYSTEM_CONNECTED') {
         console.log('[SUBrain_98] Backend EventBridge acknowledged connection');
         if (event.data && event.data.active_cards && event.data.active_cards.length > 0) {
-          initialCards = event.data.active_cards;
+          const backendCards = event.data.active_cards;
+          backendCards.forEach(bCard => {
+            const bId = bCard.id || bCard.task_id;
+            const existingIdx = initialCards.findIndex(c => (c.id === bId || c.task_id === bId));
+            if (existingIdx !== -1) {
+              initialCards[existingIdx] = { ...initialCards[existingIdx], ...bCard };
+            } else {
+              initialCards.unshift(bCard);
+            }
+          });
           saveCardsLocally();
           renderQueue();
-          selectCard(0); // Always select the latest card on top!
-          console.log(`[SUBrain_98] Loaded ${initialCards.length} cards from backend daemon`);
+          renderActiveCard(currentCardIndex);
+          console.log(`[SUBrain_98] Loaded & merged ${initialCards.length} cards from backend daemon`);
         }
+      } else if (event.type === 'WRITE_ACK') {
+        const data = event.data || {};
+        const card = initialCards.find(c => c.id === data.task_id || c.filename === data.filename) || initialCards[currentCardIndex];
+        if (card) {
+          card.status = 'COMMITTED';
+          if (data.hash) card.base_hash = data.hash;
+          card.warning = null;
+          if (card.integrity) card.integrity.score = 100.0;
+          saveCardsLocally();
+        }
+        updateSaveStatusUI('saved', data.hash);
+        renderQueue();
+        renderActiveCard(currentCardIndex);
+        showToast('저장 완료', data.message || '옵시디언 볼트에 안전하게 영구 저장되었습니다.', 'success');
+      } else if (event.type === 'WRITE_CONFLICT') {
+        const data = event.data || {};
+        updateSaveStatusUI('conflict');
+        showToast('쓰기 충돌 감지', data.message || '파일이 외부에서 변경되어 저장이 차단되었습니다.', 'error');
+      } else if (event.type === 'WRITE_ERROR') {
+        const data = event.data || {};
+        updateSaveStatusUI('error');
+        showToast('저장 실패', data.error || '볼트 디스크 쓰기 중 오류가 발생했습니다.', 'error');
+      } else if (event.type === 'CRITIC_STATUS_CHANGED') {
+        criticValidatorEnabled = Boolean(event.data && event.data.enabled);
+        updateCriticToggleUI();
       } else if (event.type === 'CARD_COMMITTED') {
         const card = initialCards.find(c => c.id === event.data.task_id || c.filename === event.data.filename) || initialCards[currentCardIndex];
         if (card) {
           card.status = 'COMMITTED';
+          if (event.data.hash) card.base_hash = event.data.hash;
           if (event.data.markdown_content) card.markdown_content = event.data.markdown_content;
           saveCardsLocally();
         }
-        const btnCommit = document.getElementById('btn-db-commit');
-        const btnCommitText = document.getElementById('btn-db-commit-text');
-        if (btnCommit) {
-          btnCommit.className = 'px-4 py-1.5 text-xs font-medium bg-emerald-600 text-white rounded-lg transition-colors flex items-center space-x-1.5 shadow-sm';
-        }
-        if (btnCommitText) btnCommitText.innerText = '✓ 볼트 저장 완료';
+        updateSaveStatusUI('saved', event.data.hash);
         renderQueue();
         renderActiveCard(currentCardIndex);
-        showToast('옵시디언 볼트 영구 저장 완료', event.data.message || `${event.data.filename} 파일이 옵시디언 볼트에 성공적으로 저장되었습니다.`, 'success');
       } else if (event.type === 'COPILOT_RESULT') {
-        const updatedText = event.data.updated_synthesis;
-        const card = initialCards.find(c => c.id === event.data.task_id) || initialCards[currentCardIndex];
+        removeCopilotThinkingBubble();
+        const data = event.data || {};
+        const card = initialCards.find(c => c.id === data.task_id) || initialCards[currentCardIndex];
         if (card) {
-          card.synthesis = updatedText;
-          if (event.data.updated_markdown_content) {
-            card.markdown_content = event.data.updated_markdown_content;
-          } else if (card.markdown_content) {
-            card.markdown_content += `\n\n> [!NOTE] 🤖 AI Copilot 반영 결과\n> ${updatedText}`;
+          if (!card.chatHistory) card.chatHistory = [];
+
+          const nowStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+          const isMod = Boolean(data.is_modification && data.proposed_markdown);
+
+          card.chatHistory.push({
+            role: 'assistant',
+            content: data.assistant_response || data.message || '응답이 완료되었습니다.',
+            timestamp: nowStr,
+            is_modification: isMod,
+            proposal_id: data.proposal_id,
+            proposed_markdown: data.proposed_markdown,
+            updated_synthesis: data.updated_synthesis,
+            base_hash: data.base_hash,
+            fact_report: data.fact_report || null
+          });
+
+          if (isMod) {
+            card.pending_proposal = {
+              proposal_id: data.proposal_id,
+              proposed_markdown: data.proposed_markdown,
+              updated_synthesis: data.updated_synthesis,
+              base_hash: data.base_hash,
+              fact_report: data.fact_report || null
+            };
           }
+
           saveCardsLocally();
         }
         renderActiveCard(currentCardIndex);
         renderQueue();
-        showToast('AI 코파일럿 교정 완료', event.data.message || '본문이 성공적으로 업데이트되었습니다.', 'success');
+        if (data.is_modification) {
+          showToast('수정 제안 도착', 'AI 수정 제안이 도착했습니다. 좌측 본문의 [Diff 비교 모드]에서 변경 내역을 확인하세요.', 'info');
+        } else {
+          showToast('AI 코파일럿', '답변이 완료되었습니다.', 'success');
+        }
       } else if (event.type === 'COPILOT_ERROR') {
+        removeCopilotThinkingBubble();
+        const card = (currentCardIndex >= 0) ? initialCards[currentCardIndex] : null;
+        if (card && card.chatHistory) {
+          const nowStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+          card.chatHistory.push({
+            role: 'assistant',
+            content: `⚠️ 오류가 발생했습니다: ${event.data.error || 'AI 처리 중 문제가 발생했습니다.'}`,
+            timestamp: nowStr
+          });
+          renderCardChatHistory(card);
+        }
         showToast('코파일럿 오류', event.data.error || 'AI 처리 중 오류가 발생했습니다.', 'error');
       } else if (event.type === 'AUTO_FIX_APPLIED') {
         const card = initialCards.find(c => c.id === event.data.task_id) || initialCards[currentCardIndex];
@@ -4010,9 +5153,9 @@ ${card.synthesis || ""}
         verdict: card.warning ? "보완 권고" : "통과",
         score: card.warning ? 82 : 94,
         review: card.warning 
-          ? "구체적 정량 지표(전환율 수치 및 연도)가 누락되어 있어 실무 적용 스펙으로 미흡함. 런칭 3주차 전환율 24.8% 데이터 보강 권고."
-          : "아키텍처 트레이드오프와 구체적 수치(40%➔92%)가 명시되어 실무 구현 가능한 스펙으로 통과.",
-        suggested_patch: "### 💡 실무 팀장 보완 스펙:\n- 실측 전환율: 24.8% (유료 결제 142명)\n- 엣지 케이스 방어: 타사 이탈률 12%p 감쇄 인과 정립 완료"
+          ? "구체적 인과 지표나 세부 맥락의 추가 보완이 권고됩니다."
+          : "아키텍처 트레이드오프와 논리적 인과가 명시되어 실무 구현 가능한 스펙으로 통과.",
+        suggested_patch: ""
       };
 
       const exec = rev.executive || {
@@ -4152,13 +5295,20 @@ ${card.synthesis || ""}
       const drawerEditor = document.getElementById('drawer-markdown-editor');
       if (!card || !drawerEditor) return;
 
-      const patchText = "\n\n### 💡 실무 팀장 보완 정량 스펙 (Anti-Fluff Patch)\n- **실측 전환율:** 런칭 3주차 유료 수강생 142명 모집 및 유료 전환율 24.8% 달성 (수익 1,840만 원)\n- **엣지 케이스 방어:** 타사 이탈률 12%p 감쇄 및 수강생 신뢰 인과 정립 완료\n";
-      drawerEditor.value += patchText;
+      const rev = card.executive_review || {};
+      const tech = rev.tech_lead || {};
+      const patchText = tech.suggested_patch || "";
+      if (!patchText) {
+        showToast('안내', '적용할 추천 패치 내용이 없습니다.', 'info');
+        return;
+      }
+
+      drawerEditor.value += `\n\n${patchText}\n`;
       card.markdown_content = drawerEditor.value;
       card.warning = null;
       if (card.integrity) card.integrity.score = 100.0;
       saveDrawerToDisk();
-      showToast('팀장 스펙 반영', '실무 팀장의 정량 수치가 마크다운 본문에 즉시 패치되었습니다.', 'success');
+      showToast('팀장 스펙 반영', '추천 패치 내용이 마크다운 본문에 패치되었습니다.', 'success');
     }
 
     function onDrawerEditorChange() {
@@ -5049,6 +6199,75 @@ type: Permanent
     }
 
     // =========================================================================
+    // FONT TYPOGRAPHY SYSTEM (가독성 최적화 폰트 실시간 전환기)
+    // =========================================================================
+    const FONT_MAP = {
+      pretendard: {
+        name: 'Pretendard',
+        family: "'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
+      },
+      lineseed: {
+        name: 'LINE Seed KR',
+        family: "'LINE Seed KR', -apple-system, sans-serif"
+      },
+      ibmplex: {
+        name: 'IBM Plex Sans KR',
+        family: "'IBM Plex Sans KR', sans-serif"
+      },
+      suit: {
+        name: 'SUIT',
+        family: "'SUIT', -apple-system, sans-serif"
+      },
+      notosans: {
+        name: 'Noto Sans KR',
+        family: "'Noto Sans KR', sans-serif"
+      },
+      inter: {
+        name: 'Inter (기존)',
+        family: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif"
+      }
+    };
+
+    function setDashboardFont(fontKey, save = true) {
+      const font = FONT_MAP[fontKey] || FONT_MAP.pretendard;
+      document.documentElement.style.setProperty('--app-font-family', font.family);
+      document.body.style.fontFamily = font.family;
+
+      const currentNameEl = document.getElementById('current-font-name');
+      if (currentNameEl) currentNameEl.innerText = font.name;
+
+      document.querySelectorAll('.font-option').forEach(btn => {
+        const isSelected = btn.getAttribute('data-font') === fontKey;
+        const checkEl = btn.querySelector('.font-check');
+        if (checkEl) {
+          checkEl.className = isSelected ? 'font-check text-indigo-600 dark:text-indigo-400 font-bold text-xs' : 'font-check text-transparent font-bold text-xs';
+        }
+      });
+
+      if (save) {
+        localStorage.setItem('subrain_selected_font', fontKey);
+        showToast('글씨체 변경 완료', `'${font.name}' 서체로 대시보드 전체가 즉시 전환되었습니다.`, 'info');
+      }
+      closeFontDropdown();
+    }
+
+    function toggleFontDropdown(event) {
+      if (event) event.stopPropagation();
+      const dropdown = document.getElementById('font-switcher-dropdown');
+      if (dropdown) dropdown.classList.toggle('hidden');
+    }
+
+    function closeFontDropdown() {
+      const dropdown = document.getElementById('font-switcher-dropdown');
+      if (dropdown) dropdown.classList.add('hidden');
+    }
+
+    function initFont() {
+      const saved = localStorage.getItem('subrain_selected_font') || 'pretendard';
+      setDashboardFont(saved, false);
+    }
+
+    // =========================================================================
     // THEME SYSTEM (Dark Mode & Persistence)
     // =========================================================================
     function toggleDarkMode() {
@@ -5068,11 +6287,6 @@ type: Permanent
 
       if (hash.includes('supplement')) {
         openSupplementBoxes[0] = true;
-        if (initialCards[0] && (!initialCards[0].user_supplements || initialCards[0].user_supplements.length === 0)) {
-          initialCards[0].user_supplements = [
-            { tag: "#수치보완", text: "런칭 3주차 실측 전환율 24.8% (유료 결제 142명) 수치 반영 완료", timestamp: "2026-09-29 13:00" }
-          ];
-        }
       }
 
       // Hash navigation for views and modals
@@ -5418,9 +6632,10 @@ type: Permanent
     // Initialize Active Card, Queue, Copilot Input, Global Search, and WebSocket on load
     window.addEventListener('DOMContentLoaded', () => {
       initTheme();
+      initFont();
       initSidebarState();
       renderQueue();
-      renderActiveCard(0);
+      renderActiveCard(-1);
       initPanelResizers();
       initDraggableOpenInspector();
       initCopilotInput();
@@ -5458,12 +6673,34 @@ type: Permanent
           toggleInspector();
         }
       }
+      if (hash.includes('card-0')) {
+        setTimeout(() => selectCard(0), 100);
+      }
+      if (hash.includes('card-1')) {
+        setTimeout(() => selectCard(1), 100);
+      }
+      if (hash.includes('test_multiturn')) {
+        setTimeout(() => {
+          selectCard(1);
+          setTimeout(() => {
+            const input = document.getElementById('copilot-input');
+            if (input) input.value = '3C4P 성과 지표를 더 구체적인 숫자로 보강해줘';
+            sendCopilotMessage();
+          }, 400);
+        }, 150);
+      }
+      if (hash.includes('chat_collapsed')) {
+        setTimeout(() => {
+          toggleCopilotChatPanel(false);
+        }, 200);
+      }
     });
     // Fallback immediate execution
     initTheme();
+    initFont();
     initSidebarState();
     renderQueue();
-    renderActiveCard(0);
+    renderActiveCard(-1);
     initPanelResizers();
     initDraggableOpenInspector();
     initCopilotInput();

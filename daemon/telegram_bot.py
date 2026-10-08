@@ -228,6 +228,8 @@ async def process_and_reply(trigger_obj, context: ContextTypes.DEFAULT_TYPE, raw
             "synthesis": summary,
             "filename": filename,
             "markdown_content": result.get("markdown_content", ""),
+            "raw_source": raw_input,
+            "url": raw_input if raw_input.startswith("http") else f"internal://telegram-intake/{task_id}",
             "suggestedPrompt": f"{card_title}의 핵심 인과를 바탕으로 3줄 요약을 압축해줘...",
             "copilotActions": [
                 {"label": "🪄 헌법 규격 점검", "prompt": f"{card_title} 본문이 00_헌법 서식에 맞는지 재검토해줘"},
