@@ -81,7 +81,7 @@ def read_note(rel_path: str) -> Optional[Dict[str, Any]]:
     stat = target.stat()
     
     return {
-        "rel_path": str(target.relative_to(VAULT_DIR)),
+        "rel_path": str(target.relative_to(VAULT_DIR.resolve())),
         "filename": target.name,
         "content": content,
         "hash": content_hash,

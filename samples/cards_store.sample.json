@@ -1,0 +1,54 @@
+[
+  {
+    "id": "CARD-SAMPLE-01",
+    "title": "컨텍스트 엔지니어링 원리",
+    "category": "Permanent",
+    "status": "COMMITTED",
+    "tags": ["#Permanent", "#LLM", "#Architecture"],
+    "wikilinks": ["[[00_헌법]]", "[[에이전트_상태머신_설계]]"],
+    "synthesis": "LLM 에이전트의 안정성은 프롬프트 튜닝보다 파일시스템 단일 진실원천(SSOT)과 불변식 제어를 통한 컨텍스트 예산 관리에 좌우된다.",
+    "filename": "모듈_영구지식_샘플.md",
+    "filepath": "./samples/vault/모듈_영구지식_샘플.md",
+    "base_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "integrity": {
+      "score": 100.0,
+      "checklist": [
+        {"id": "RULE-01", "text": "CCIA 4단계 논리 구조 준수", "passed": true},
+        {"id": "RULE-02", "text": "상위 인덱스(MOC) 위키링크 매핑", "passed": true},
+        {"id": "RULE-03", "text": "원문 외 임의 수치 날조 없음", "passed": true}
+      ]
+    },
+    "raw_source": "에이전트 시스템에서 규칙을 무한정 추가하면 컨텍스트 오염이 발생하므로, 파일시스템 단일 진실원천과 비가역적 파이프라인으로 통제해야 한다.",
+    "suggestedPrompt": "이 원리를 바탕으로 우리 프로젝트에 적용할 3대 불변식을 정리해줘...",
+    "thinking": [
+      {"step": "ANALYSIS", "role": "DIRECTOR", "text": "인입 메모에서 핵심 논리 구조와 컨텍스트 엔지니어링 원칙 추출"},
+      {"step": "CRITIC", "role": "CRITIC", "text": "원문과 대조하여 날조된 수치나 임의의 고유명사가 없음을 확인 (100% 통과)"}
+    ]
+  },
+  {
+    "id": "CARD-SAMPLE-02",
+    "title": "데이터 파이프라인 무결성 개편",
+    "category": "Experience",
+    "status": "COMMITTED",
+    "tags": ["#Experience", "#Refactoring", "#Backend"],
+    "wikilinks": ["[[00_헌법]]", "[[컨텍스트 엔지니어링 원리]]"],
+    "synthesis": "다중 쓰기 지점으로 인한 파일 깨짐과 환각 수치 문제를 단일 관문 게이트웨이 및 원문 대조 엔진으로 해결한 리팩토링 경험.",
+    "filename": "모듈_경험정리_샘플.md",
+    "filepath": "./samples/vault/모듈_경험정리_샘플.md",
+    "base_hash": "ca978112ca1bbdcafac231b39a23dc4da786eff8147c4e72b9807785afee48bb",
+    "integrity": {
+      "score": 100.0,
+      "checklist": [
+        {"id": "RULE-01", "text": "STAR 문제 해결 5단계 서술", "passed": true},
+        {"id": "RULE-02", "text": "원문 인용구와 수치 100% 일치", "passed": true},
+        {"id": "RULE-03", "text": "인과관계 기반 회고 및 교훈 도출", "passed": true}
+      ]
+    },
+    "raw_source": "AI 코파일럿이 대화 중에 사용자 확인 없이 파일을 덮어쓰거나, 원문 메모에 없는 지표를 임의로 지어내는 문제가 있었습니다.",
+    "suggestedPrompt": "이 경험에서 도출할 수 있는 시스템 아키텍트로서의 강점을 3가지로 요약해줘...",
+    "thinking": [
+      {"step": "ANALYSIS", "role": "DIRECTOR", "text": "STAR 구조로 문제, 원인, 조치, 결과 분해"},
+      {"step": "CRITIC", "role": "CRITIC", "text": "Fact Guard 대조 결과 원문에 명시되지 않은 정량 수치가 일절 없음을 확인"}
+    ]
+  }
+]

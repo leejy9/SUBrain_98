@@ -19,3 +19,14 @@ __pycache__/
 .Trashes
 ehthumbs.db
 Thumbs.db
+
+# Security & Personal Data (Public Sanitization)
+/SUBrain_98/
+/daemon/cards_store.json
+/daemon/write_journal.jsonl
+/dashboard_*.png
+/dashboard_prototype.html
+/00_PROJECT_LOG.md
+/run.sh
+/daemon/run.sh
+/.agents/
