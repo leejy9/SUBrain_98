@@ -1,0 +1,5 @@
+{
+  "name": "subrain-mods",
+  "owner": { "name": "leejy9" },
+  "plugins": [{ "name": "agent-office", "source": "./mods/agent-office" }]
+}
