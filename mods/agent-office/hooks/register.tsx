@@ -55,6 +55,40 @@ function elapsed(from: number, to: number) {
 
 const TYPING = ['▖', '▘', '▝', '▗']
 
+function officeText(list: Employee[], b: Boss, ranks: Roster, now: number) {
+  const working = list.filter(one => one.status === 'working')
+  const resting = list.filter(one => one.status !== 'working')
+  const lines = [
+    `🏢 우리 회사 · 오늘 출근 ${list.length}명 (근무 중 ${working.length})`,
+    '',
+    `👑 팀장실 — Claude: ${b.action} · 도구 ${b.tools}회`,
+    '',
+    '🪑 사무실',
+  ]
+  if (working.length === 0) lines.push('  지금 일하는 직원이 없어요.')
+  for (const one of working) {
+    const { face, team } = departmentOf(one.type)
+    lines.push(
+      `  ${face} ${team} Lv.${levelOf(ranks[one.type]?.jobs ?? 0)} · “${one.task}” · ${one.action} · ⏱ ${elapsed(one.startedAt, now)} · 🔨 ${one.tools}회`,
+    )
+  }
+  lines.push('', '☕ 휴게실')
+  if (resting.length === 0) lines.push('  아직 퇴근한 직원이 없어요.')
+  for (const one of resting.slice(-8).reverse()) {
+    const { face, team } = departmentOf(one.type)
+    lines.push(`  ${face} ${team} ${one.action} · “${one.task}” · ${elapsed(one.startedAt, one.endedAt ?? now)}`)
+  }
+  lines.push('', '📒 인사기록부')
+  const veterans = Object.entries(ranks).sort((a, z) => z[1].jobs - a[1].jobs)
+  if (veterans.length === 0) lines.push('  아직 기록이 없어요.')
+  for (const [type, rec] of veterans) {
+    const { face, team } = departmentOf(type)
+    lines.push(`  ${face} ${team} Lv.${levelOf(rec.jobs)} · 완료 업무 ${rec.jobs}건`)
+  }
+
+  return lines.join('\n')
+}
+
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     await $.command.register({
@@ -80,10 +114,13 @@ export const register: Register = on => {
     return next(e)
   })
 
+  // 패널을 그리지 않는 화면(일부 앱)에서도 보이도록 사무실 현황을 글로도 돌려줘요
   on('command.run', { command: 'office' }, async $ => {
-    await $.ui.open({ id: PANE, title: '🏢 우리 회사 사무실' })
+    const opened = await $.ui.open({ id: PANE, title: '🏢 우리 회사 사무실' })
+    const snapshot = officeText(await read($, staff), await read($, boss), await read($, roster), await $.clock.now())
+    const note = opened.isPlaced ? '' : `\n\n(이 화면에는 사무실 패널을 띄울 수 없어 글로 보여드려요: ${opened.reason})`
 
-    return { text: '사무실 문을 열었어요.' }
+    return { text: snapshot + note }
   })
 
   on('prompt.submit', async ($, e, next) => {
