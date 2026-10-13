@@ -1,0 +1,6 @@
+{
+  "name": "agent-office",
+  "version": "0.1.0",
+  "description": "메인 에이전트(팀장)와 서브에이전트(직원)가 일하는 모습을 픽셀 사무실처럼 보여주는 Mod",
+  "types": "./types/index.d.ts"
+}
