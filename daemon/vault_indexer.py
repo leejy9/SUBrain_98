@@ -35,8 +35,6 @@ class VaultIndexer:
         for path in self.vault_dir.rglob("*.md"):
             if any(part.startswith(".") for part in path.parts):
                 continue
-            if path.name == "00_헌법.md":
-                continue
 
             name = path.stem
             try:
@@ -51,7 +49,11 @@ class VaultIndexer:
 
             # 분류 유형 태깅
             note_category = "일반"
-            if name.startswith("경험_"):
+            if name.startswith("MOC_") or "MOC" in name or name.endswith("_MOC"):
+                note_category = "MOC"
+            elif name == "00_헌법":
+                note_category = "헌법"
+            elif name.startswith("경험_"):
                 note_category = "경험"
             elif name.startswith("역량_"):
                 note_category = "역량"
@@ -67,17 +69,132 @@ class VaultIndexer:
             # 연결된 위키링크 추출
             outgoing_links = re.findall(r'\[\[(.*?)\]\]', content)
 
+            # YAML Frontmatter 제거 후 마크다운 본문 추출 (줄바꿈 보존)
+            clean_body = re.sub(r'^---\s*[\s\S]*?---\s*', '', content).strip()
+            markdown_snippet = clean_body[:700] if clean_body else content[:300]
+
             notes.append({
                 "name": name,
                 "h1": h1,
                 "category": note_category,
                 "path": str(path.relative_to(self.vault_dir)),
                 "full_path": path,
-                "snippet": content[:300].replace("\n", " "),
-                "outgoing_links": outgoing_links
+                "snippet": markdown_snippet,
+                "outgoing_links": outgoing_links,
+                "mtime": path.stat().st_mtime
             })
 
         return notes
+
+    def get_graph_data(self) -> Dict[str, Any]:
+        """D3.js Force Graph에 전달할 정규화된 노드 및 엣지 네트워크 구조를 생성합니다."""
+        import datetime
+        notes = self.list_notes()
+        now_ts = datetime.datetime.now().timestamp()
+
+        node_map = {}
+        inbound_counts = {}
+
+        # 1. 노드 정규화
+        for n in notes:
+            name = n["name"]
+            mtime = n.get("mtime", now_ts)
+            age_days = max(0.0, (now_ts - mtime) / 86400.0)
+            is_new = age_days <= 1.0  # 24시간 이내
+
+            if is_new:
+                age_group = "new"
+            elif age_days <= 7.0:
+                age_group = "recent"
+            elif age_days <= 30.0:
+                age_group = "medium"
+            else:
+                age_group = "old"
+
+            # 카테고리 세분화
+            cat = n["category"]
+            if name.startswith("MOC_") or "MOC" in name or name.endswith("_MOC"):
+                cat = "MOC"
+            elif name == "00_헌법":
+                cat = "헌법"
+            elif name.startswith("템플릿_"):
+                cat = "템플릿"
+
+            node_map[name] = {
+                "id": name,
+                "name": name,
+                "h1": n["h1"],
+                "category": cat,
+                "path": n["path"],
+                "age_days": round(age_days, 1),
+                "is_new": is_new,
+                "age_group": age_group,
+                "outgoing_links": n["outgoing_links"],
+                "snippet": n["snippet"],
+                "referenced_count": 1,
+            }
+            inbound_counts[name] = 0
+
+        # 2. 엣지 연결 및 인바운드 집계
+        raw_links = []
+        for n in notes:
+            src = n["name"]
+            for target_raw in n["outgoing_links"]:
+                # [[링크명|별칭]] 형태 정제
+                target = target_raw.split("|")[0].strip()
+                if target.endswith(".md"):
+                    target = target[:-3]
+                if target.startswith("[[") and target.endswith("]]"):
+                    target = target[2:-2]
+
+                if not target or target == src:
+                    continue
+
+                # 볼트에 실재하지 않더라도 MOC_로 시작하는 핵심 허브인 경우 자동 등록
+                if target.startswith("MOC_") and target not in node_map:
+                    node_map[target] = {
+                        "id": target,
+                        "name": target,
+                        "h1": f"{target} (지식 지도)",
+                        "category": "MOC",
+                        "path": f"{target}.md",
+                        "age_days": 1.0,
+                        "is_new": False,
+                        "age_group": "recent",
+                        "outgoing_links": [],
+                        "snippet": f"{target} MOC 중심 허브입니다. 수많은 실전 경험과 지식 노드를 통합 연결합니다.",
+                        "referenced_count": 1,
+                    }
+                    inbound_counts[target] = 0
+
+                # 볼트에 실재하는 노드 대상만 링크 등록
+                if target in node_map:
+                    raw_links.append({"source": src, "target": target})
+                    inbound_counts[target] = inbound_counts.get(target, 0) + 1
+
+        # 3. 노드 참조 가중치(referenced_count) 업데이트
+        for name, node in node_map.items():
+            inbound = inbound_counts.get(name, 0)
+            node["inbound_count"] = inbound
+            node["referenced_count"] = max(1, inbound)
+
+        # 4. 중복 엣지 제거 (무방향 쌍 유일성 확보)
+        seen_edges = set()
+        deduped_links = []
+        for link in raw_links:
+            edge_key = tuple(sorted([link["source"], link["target"]]))
+            if edge_key not in seen_edges:
+                seen_edges.add(edge_key)
+                deduped_links.append(link)
+
+        nodes_list = list(node_map.values())
+        return {
+            "nodes": nodes_list,
+            "links": deduped_links,
+            "total_nodes": len(nodes_list),
+            "total_links": len(deduped_links),
+            "new_nodes_count": sum(1 for n in nodes_list if n["is_new"])
+        }
 
     def get_note_detail(self, node_name: str) -> Optional[Dict[str, Any]]:
         """특정 노드의 상세 본문 및 1-hop 이웃 링크를 인출합니다."""
