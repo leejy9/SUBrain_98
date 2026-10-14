@@ -1,5 +1,8 @@
 import logging
 import html
+import asyncio
+import re
+import datetime
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.constants import ParseMode
 from telegram.request import HTTPXRequest
@@ -13,7 +16,6 @@ from telegram.ext import (
 )
 from config import TELEGRAM_BOT_TOKEN
 from agent_core import ConstitutionalAgent
-import datetime
 from event_bridge import event_bridge
 
 # 로깅 설정
@@ -24,6 +26,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 agent = ConstitutionalAgent()
+intake_lock = asyncio.Lock()
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """/start 커맨드 핸들러"""
@@ -45,37 +48,44 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     reply_to = update.message.reply_to_message
 
     # 1. 이전 보고서 메시지에 답장한 경우 -> 대화형 수정(Refinement) 요청으로 처리
-    if reply_to and "last_filename" in context.user_data:
-        target_file = context.user_data["last_filename"]
-        status_msg = await update.message.reply_text(f"⏳ <code>{html.escape(target_file)}</code> 노트를 피드백에 맞춰 재조정 중입니다...", parse_mode=ParseMode.HTML)
-        
-        result = agent.refine_note(target_file, text)
-        if result.get("success"):
-            reasoning = "\n".join([f"• {html.escape(s)}" for s in result.get("reasoning_steps", [])])
-            report_text = (
-                f"✅ <b>[노트 재조정 완료]</b>\n"
-                f"📄 파일: <code>{html.escape(target_file)}</code>\n\n"
-                f"🧠 <b>반영된 판단 경로</b>:\n{reasoning}\n\n"
-                f"Google Drive를 통해 실시간 업데이트되었습니다."
+    if reply_to:
+        target_file = None
+        if reply_to.text:
+            match = re.search(r'📄\s*<code>([^<]+\.md)</code>', reply_to.text)
+            if match:
+                target_file = match.group(1).strip()
+        if not target_file and "last_filename" in context.user_data:
+            target_file = context.user_data["last_filename"]
+
+        if target_file:
+            status_msg = await update.message.reply_text(
+                f"⏳ <code>{html.escape(target_file)}</code> 노트를 피드백에 맞춰 재조정 중입니다...",
+                parse_mode=ParseMode.HTML
             )
-            keyboard = [[InlineKeyboardButton("↩️ 롤백 (파일 삭제)", callback_data=f"rollback_{target_file}")]]
-            await status_msg.edit_text(report_text, parse_mode=ParseMode.HTML, reply_markup=InlineKeyboardMarkup(keyboard))
-        else:
-            await status_msg.edit_text(f"❌ 수정 실패: {html.escape(str(result.get('error')))}")
-        return
+            result = await asyncio.to_thread(agent.refine_note, target_file, text)
+            if result.get("success"):
+                reasoning = "\n".join([f"• {html.escape(s)}" for s in result.get("reasoning_steps", [])])
+                report_text = (
+                    f"✅ <b>[피드백 반영 완료]</b>\n"
+                    f"📄 <code>{html.escape(target_file)}</code>\n\n"
+                    f"🧠 <b>반영된 수정 내역</b>:\n{reasoning}\n\n"
+                    f"💬 <i>추가 수정이 필요하시면 이 메시지에 다시 답장(Reply)을 남겨주세요.</i>"
+                )
+                keyboard = [
+                    [
+                        InlineKeyboardButton("↩️ 롤백 (파일 격리)", callback_data=f"rollback_{target_file}"),
+                        InlineKeyboardButton("🌐 대시보드 열기", url="http://localhost:8765/")
+                    ]
+                ]
+                await status_msg.edit_text(report_text, parse_mode=ParseMode.HTML, reply_markup=InlineKeyboardMarkup(keyboard))
+            else:
+                await status_msg.edit_text(f"❌ 수정 실패: {html.escape(str(result.get('error')))}")
+            return
 
-    # 2. 맥락 입력을 대기 중인 상태에서 텍스트가 들어온 경우
-    if context.user_data.get("waiting_context"):
-        raw_input = context.user_data.pop("pending_raw", "")
-        category = context.user_data.pop("pending_cat", "Experience")
-        context.user_data["waiting_context"] = False
-        await process_and_reply(update, context, raw_input, user_context=text, category=category)
-        return
-
-    # 3. 새로운 인테이크 수신 -> 카테고리 선택 버튼 제공
-    context.user_data["pending_raw"] = text
+    # 2. 신규 인테이크 수신 -> 불필요한 질문 버튼 없이 즉시 00_헌법 제7조 디스패치 및 1장 카드 회신 (INV-E1)
     task_id = f"DOC-{datetime.datetime.now().strftime('%m%d-%H%M%S')}"
     context.user_data["current_task_id"] = task_id
+    context.user_data["pending_raw"] = text
 
     try:
         await event_bridge.broadcast("CARD_CREATED", {
@@ -87,25 +97,22 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         logger.warning(f"EventBridge broadcast error: {e}")
 
-    keyboard = [
-        [
-            InlineKeyboardButton("💼 커리어/경험 (STAR)", callback_data="cat_Experience"),
-            InlineKeyboardButton("🧠 영구 지식 (개념)", callback_data="cat_Permanent")
-        ],
-        [
-            InlineKeyboardButton("🏢 기업/직무 분석", callback_data="cat_Application"),
-            InlineKeyboardButton("⚡ 빠른 메모 (인박스)", callback_data="cat_Fleeting")
-        ],
-        [
-            InlineKeyboardButton("✏️ 1줄 맥락 직접 쓰고 저장", callback_data="ask_context")
-        ]
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    await update.message.reply_text(
-        "📥 <b>정보가 접수되었습니다.</b>\n이 내용을 어떤 맥락으로 다룰까요?",
-        parse_mode=ParseMode.HTML,
-        reply_markup=reply_markup
+    # 동시 인테이크 시 순차 큐잉 안내 (asyncio.Lock 보호)
+    is_waiting = intake_lock.locked()
+    initial_text = (
+        "⏳ <b>앞선 인테이크를 안전하게 처리 중입니다... (대기열 순차 처리 대기 중)</b>"
+        if is_waiting
+        else "⏳ <b>00_헌법에 따라 정보를 분석하고 지식망에 연결 중입니다...</b>"
     )
+    status_msg = await update.message.reply_text(initial_text, parse_mode=ParseMode.HTML)
+
+    async with intake_lock:
+        if is_waiting:
+            try:
+                await status_msg.edit_text("⏳ <b>00_헌법에 따라 정보를 분석하고 지식망에 연결 중입니다...</b>", parse_mode=ParseMode.HTML)
+            except Exception:
+                pass
+        await process_and_reply(status_msg, context, raw_input=text, user_context="", category="", task_id=task_id)
 
 async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """인라인 버튼 클릭 핸들러"""
@@ -116,34 +123,27 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # 롤백 처리
     if data.startswith("rollback_"):
         filename = data.replace("rollback_", "")
-        success = agent.rollback_note(filename)
+        success = await asyncio.to_thread(agent.rollback_note, filename)
         if success:
-            await query.edit_message_text(f"🗑️ <code>{html.escape(filename)}</code> 파일이 안전하게 삭제(롤백)되었습니다.", parse_mode=ParseMode.HTML)
+            await query.edit_message_text(f"🗑️ <code>{html.escape(filename)}</code> 파일이 안전하게 _archive/rolled_back으로 격리되었습니다.", parse_mode=ParseMode.HTML)
         else:
-            await query.edit_message_text(f"⚠️ <code>{html.escape(filename)}</code> 파일을 찾을 수 없거나 이미 삭제되었습니다.", parse_mode=ParseMode.HTML)
+            await query.edit_message_text(f"⚠️ <code>{html.escape(filename)}</code> 파일을 찾을 수 없거나 이미 이동되었습니다.", parse_mode=ParseMode.HTML)
         return
 
-    # 직접 맥락 입력 요청
-    if data == "ask_context":
-        context.user_data["waiting_context"] = True
-        context.user_data["pending_cat"] = "Experience"
-        await query.edit_message_text("✏️ 이 정보를 저장하는 <b>목적이나 내 생각</b>을 1줄로 답장해 주세요:", parse_mode=ParseMode.HTML)
-        return
-
-    # 카테고리 선택에 따른 즉시 정규화 처리
+    # 레거시 카테고리 선택 콜백 방어 지원
     category = data.replace("cat_", "")
     raw_input = context.user_data.pop("pending_raw", "")
-    if not raw_input:
-        await query.edit_message_text("⚠️ 세션이 만료되었습니다. 다시 공유해 주세요.")
-        return
+    if raw_input:
+        task_id = context.user_data.get("current_task_id", f"DOC-{datetime.datetime.now().strftime('%m%d-%H%M%S')}")
+        await query.edit_message_text("⏳ <b>00_헌법을 검토하고 지식 그래프에 노드를 연결 중입니다...</b>", parse_mode=ParseMode.HTML)
+        async with intake_lock:
+            await process_and_reply(query, context, raw_input, user_context="", category=category, task_id=task_id)
 
-    await query.edit_message_text("⏳ <b>00_헌법을 검토하고 지식 그래프에 노드를 연결 중입니다...</b>", parse_mode=ParseMode.HTML)
-    await process_and_reply(query, context, raw_input, user_context="", category=category)
-
-async def process_and_reply(trigger_obj, context: ContextTypes.DEFAULT_TYPE, raw_input: str, user_context: str, category: str):
-    """에이전트를 실행하고 텔레그램에 판단 보고서를 회신합니다."""
+async def process_and_reply(trigger_obj, context: ContextTypes.DEFAULT_TYPE, raw_input: str, user_context: str, category: str, task_id: str = None):
+    """에이전트를 비차단으로 실행하고 텔레그램에 판단 보고서를 회신합니다."""
     try:
-        result = agent.process_intake(raw_input, user_context=user_context, category_intent=category)
+        # 이벤트 루프 블로킹을 방지하기 위해 별도 스레드에서 agent.process_intake 비차단 실행
+        result = await asyncio.to_thread(agent.process_intake, raw_input, user_context=user_context, category_intent=category)
         filename = result["filename"]
         context.user_data["last_filename"] = filename
 
@@ -202,8 +202,8 @@ async def process_and_reply(trigger_obj, context: ContextTypes.DEFAULT_TYPE, raw
             {"text": "구체적 수치 및 연도 명시", "passed": is_auto_committed}
         ])
 
-        # 실시간 웹 대시보드(EventBridge)로 정규화 완료 카드 브로드캐스트
-        task_id = context.user_data.get("current_task_id", f"DOC-{datetime.datetime.now().strftime('%m%d-%H%M%S')}")
+        # 실시간 웹 대시보드(EventBridge)로 정규화 완료 카드 브로드캐스트 (경쟁 상태 방지를 위해 명시적 task_id 우선)
+        task_id = task_id or context.user_data.get("current_task_id", f"DOC-{datetime.datetime.now().strftime('%m%d-%H%M%S')}")
         card_title = filename.replace('.md', '')
         
         thinking_list = [
@@ -273,17 +273,21 @@ async def process_and_reply(trigger_obj, context: ContextTypes.DEFAULT_TYPE, raw
             f"🛡️ <b>비판관이 차단한 억지 연결 (방어 완료)</b>\n"
             f"{rejected_block}\n\n"
             f"🏷️ <b>역량 강화</b>: <b>{comp_str}</b>\n\n"
+            f"🖥️ <b>대화형 작업대</b>: <code>http://localhost:8765/</code>\n"
             f"💡 <i>수정 팁: 연결을 바꾸고 싶다면 답장(Reply)으로 <b>\"OO 말고 XX로 연결해줘\"</b>라고 남겨주세요.</i>"
         )
 
         keyboard = [
             [
-                InlineKeyboardButton("↩️ 롤백 (파일 삭제)", callback_data=f"rollback_{filename}")
+                InlineKeyboardButton("↩️ 롤백 (파일 삭제)", callback_data=f"rollback_{filename}"),
+                InlineKeyboardButton("🌐 대시보드 열기", url="http://localhost:8765/")
             ]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
 
-        if hasattr(trigger_obj, "message") and trigger_obj.message:
+        if hasattr(trigger_obj, "edit_text"):
+            await trigger_obj.edit_text(report_text, parse_mode=ParseMode.HTML, reply_markup=reply_markup)
+        elif hasattr(trigger_obj, "message") and trigger_obj.message:
             await trigger_obj.message.reply_text(report_text, parse_mode=ParseMode.HTML, reply_markup=reply_markup)
         else:
             await trigger_obj.edit_message_text(report_text, parse_mode=ParseMode.HTML, reply_markup=reply_markup)
@@ -291,7 +295,9 @@ async def process_and_reply(trigger_obj, context: ContextTypes.DEFAULT_TYPE, raw
     except Exception as e:
         logger.error(f"Error processing intake: {e}", exc_info=True)
         err_msg = f"❌ 정규화 처리 중 오류가 발생했습니다:\n<code>{html.escape(str(e))}</code>"
-        if hasattr(trigger_obj, "message") and trigger_obj.message:
+        if hasattr(trigger_obj, "edit_text"):
+            await trigger_obj.edit_text(err_msg, parse_mode=ParseMode.HTML)
+        elif hasattr(trigger_obj, "message") and trigger_obj.message:
             await trigger_obj.message.reply_text(err_msg, parse_mode=ParseMode.HTML)
         else:
             await trigger_obj.edit_message_text(err_msg, parse_mode=ParseMode.HTML)

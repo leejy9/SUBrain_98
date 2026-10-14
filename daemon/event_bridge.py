@@ -1,4 +1,5 @@
 import asyncio
+import http
 import json
 import logging
 import datetime
@@ -35,6 +36,11 @@ class EventBridge:
         if CARDS_STORE_PATH.exists():
             try:
                 data = json.loads(CARDS_STORE_PATH.read_text(encoding="utf-8"))
+                from scoring_engine import ScoringEngine
+                from vault_indexer import VaultIndexer
+                v_indexer = VaultIndexer()
+                vault_notes = v_indexer.list_notes()
+
                 for item in data:
                     card_id = item.get("id") or item.get("task_id")
                     if card_id:
@@ -50,10 +56,55 @@ class EventBridge:
                                 item["markdown_content"] = disk_info["content"]
                                 item["base_hash"] = disk_info["hash"]
                                 item["filepath"] = str(VAULT_DIR / disk_info["rel_path"])
+
+                        # [Phase 2] 3대 보조 스코어링 메타데이터 주입
+                        if "scoring_metadata" not in item or not item["scoring_metadata"]:
+                            content_text = item.get("markdown_content") or item.get("raw_content") or item.get("title", "")
+                            user_ctx = item.get("user_context") or item.get("raw_intent") or ""
+                            score_meta = ScoringEngine.compute_score(content_text, user_ctx, vault_notes)
+                            item["scoring_metadata"] = score_meta.model_dump()
+                            item["triage_recommendation"] = score_meta.triage_recommendation.value
+
                         self.cards[card_id] = item
                 logger.info(f"[EventBridge] 영구 저장소에서 {len(self.cards)}개 카드 상태 복원 및 볼트 디스크 SSOT 동기화 완료")
             except Exception as e:
                 logger.error(f"[EventBridge] 카드 복원 실패: {e}")
+
+        # [SSOT 불변식 2]: 실제 디스크 _inbox/ 디렉터리에 존재하는 파일들을 카드 큐에 자동 등록
+        try:
+            inbox_dir = VAULT_DIR / "_inbox"
+            if inbox_dir.exists():
+                for f in sorted(inbox_dir.glob("*.md"), key=lambda x: x.stat().st_mtime, reverse=True):
+                    existing = any(
+                        c.get("filename") in [f.name, f"_inbox/{f.name}"]
+                        or c.get("title") == f.stem
+                        for c in self.cards.values()
+                    )
+                    if not existing:
+                        disk_info = vault_io.read_note(f"_inbox/{f.name}")
+                        if disk_info:
+                            card_id = f"INBOX-{f.stem[:12]}"
+                            created_str = datetime.datetime.fromtimestamp(f.stat().st_mtime).strftime("%Y-%m-%d %H:%M:%S")
+                            new_card = {
+                                "id": card_id,
+                                "task_id": card_id,
+                                "title": f.stem,
+                                "filename": f"_inbox/{f.name}",
+                                "status": "STAGED",
+                                "stage": "INBOX_REVIEW",
+                                "markdown_content": disk_info["content"],
+                                "base_hash": disk_info["hash"],
+                                "filepath": str(f),
+                                "created_at": created_str,
+                                "tags": ["#_inbox", "#SUBrain_98"],
+                                "summary": f"인박스 미검토 노트: {f.stem}",
+                            }
+                            # LIFO: 최신 인박스 노트를 큐 앞단에 배치
+                            self.cards = {card_id: new_card, **self.cards}
+                            logger.info(f"[EventBridge] 볼트 _inbox 신규 노트 자동 발굴 및 카드 큐 등록: {f.name}")
+                self.save_cards()
+        except Exception as e:
+            logger.error(f"[EventBridge] _inbox 동기화 실패: {e}")
 
     def save_cards(self):
         """현재 인메모리 카드 상태를 디스크 파일(cards_store.json)에 영구 저장합니다."""
@@ -336,79 +387,22 @@ task_id: {task_id}
                 markdown_content = disk_note["content"]
 
             try:
-                from google import genai
-                client = genai.Client(api_key=GEMINI_API_KEY)
+                from agent_core import ConstitutionalAgent
+                agent = ConstitutionalAgent()
 
-                history_text = ""
-                if history:
-                    recent = history[-6:]
-                    h_lines = []
-                    for h in recent:
-                        r = "사용자" if h.get("role") == "user" else "AI 코파일럿"
-                        h_lines.append(f"- {r}: {h.get('content', '')}")
-                    history_text = "\n[이전 대화 기록]:\n" + "\n".join(h_lines)
-
-                system_prompt = f"""당신은 사용자의 옵시디언 지식 베이스 문서를 함께 읽고 대화하며 교정하는 AI 어시스턴트(SUBrain Copilot)입니다.
-
-[문서 제목]: {title}
-[저장 파일명]: {filename}
-
-[현재 문서 마크다운 전문]:
-```markdown
-{markdown_content or current_synthesis}
-```
-{history_text}
-
-[사용자의 이번 메시지]:
-{prompt}
-
-당신은 Antigravity Agent나 ChatGPT, Claude처럼 자연스럽고 뛰어난 성능의 대화형 어시스턴트입니다.
-1. 사용자가 질문/탐색을 하거나 단순 대화를 나누는 경우 (문서 수정 불필요):
-   - 문서 내용을 바탕으로 친절하고 명쾌하게 질문에 답변하세요.
-   - is_modification: false
-   - updated_markdown: "" (빈 문자열)
-   - updated_synthesis: 현재 요약 본문 유지
-
-2. 사용자가 문서 내용 수정, 보강, 재작성, 특정 섹션 변경, 가이드 추가 등을 요청하는 경우:
-   - [사실 무결성 불변식]: 사용자의 입력이나 현재 문서에 명시되지 않은 정량적 수치(%, 명, 금액 등)나 고유명사를 절대로 지어내지 마세요.
-   - 사용자의 의도에 맞추어 [현재 문서 마크다운 전문]의 해당 섹션을 직접 지능적으로 수정·보강하세요.
-   - 인위적인 '> [!NOTE] 교정 내역' 같은 잡다한 로그 블록을 덧붙이지 마세요.
-   - 문서 본문 그 자체를 완성도 높은 옵시디언 마크다운(Frontmatter 포함 전문)으로 깔끔하게 업데이트하세요.
-   - is_modification: true
-   - updated_markdown: 수정된 문서의 완성된 전체 마크다운 문자열
-   - updated_synthesis: 수정된 핵심 내용을 반영한 1~2문장 요약
-   - assistant_response: 사용자의 요청을 어떻게 반영했는지 친절하고 자연스러운 대화체로 답변하세요.
-
-출력 형식은 마크다운 코드블록(```json) 없이 순수 JSON만 출력하세요:
-{{
-  "assistant_response": "자연스러운 대화형 답변 (마크다운 지원)",
-  "is_modification": true,
-  "updated_synthesis": "핵심 1~2문장 요약",
-  "updated_markdown": "수정된 문서 마크다운 전문 (Frontmatter 포함, 수정 없을 시 빈 문자열)"
-}}"""
-
-                resp = client.models.generate_content(
-                    model="gemini-3.1-flash-lite",
-                    contents=[system_prompt]
+                copilot_result = agent.execute_devil_advocate_copilot(
+                    title=title,
+                    filename=filename,
+                    markdown_content=markdown_content or current_synthesis,
+                    prompt=prompt,
+                    history=history,
+                    synthesis=current_synthesis
                 )
-                raw_text = resp.text.strip()
-                if raw_text.startswith("```"):
-                    lines = raw_text.splitlines()
-                    if lines[0].startswith("```"): lines = lines[1:]
-                    if lines and lines[-1].startswith("```"): lines = lines[:-1]
-                    raw_text = "\n".join(lines).strip()
 
-                try:
-                    parsed = json.loads(raw_text)
-                    assistant_response = parsed.get("assistant_response", "응답이 완료되었습니다.")
-                    is_modification = parsed.get("is_modification", False)
-                    updated_text = parsed.get("updated_synthesis", current_synthesis)
-                    updated_markdown = parsed.get("updated_markdown", "")
-                except Exception:
-                    assistant_response = raw_text
-                    is_modification = False
-                    updated_text = current_synthesis
-                    updated_markdown = ""
+                assistant_response = copilot_result.get("assistant_response", "응답이 완료되었습니다.")
+                is_modification = copilot_result.get("is_modification", False)
+                updated_text = copilot_result.get("updated_synthesis", current_synthesis)
+                updated_markdown = copilot_result.get("updated_markdown", "")
 
                 # [INV-1 불변식 준수]: Copilot 실행 도중에는 디스크 파일을 절대 자동 변경하지 않는다.
                 # 대신 제안(Proposal) 객체를 클라이언트로 전달하여 사용자가 본문 Diff를 검토하고 수동 승인하도록 유도한다.
@@ -664,6 +658,75 @@ task_id: {task_id}
             except Exception as e:
                 logger.error(f"[EventBridge] 인사이트 승인 처리 실패: {e}")
 
+        elif msg_type == "APPROVE_MOC_MOVE":
+            # [MOC 소속 이사 승인 -> moc_service 경유]
+            insight_id = msg.get("insight_id", "")
+            node_filename = msg.get("node_filename", "")
+            target_moc = msg.get("target_moc", "")
+            try:
+                from moc_service import MOCService
+                moc_service = MOCService(str(vault_io.vault_dir))
+                res = moc_service.reassign_node_moc(node_filename, target_moc)
+                await self.broadcast("MOC_MOVE_APPROVED", {
+                    "insight_id": insight_id,
+                    "node_filename": node_filename,
+                    "target_moc": target_moc,
+                    "result": res,
+                    "message": f"'{node_filename}' 노드가 '{target_moc}'으로 안전하게 소속 이전되었습니다."
+                })
+            except Exception as e:
+                logger.error(f"[EventBridge] MOC 소속 이사 승인 실패: {e}")
+
+        elif msg_type == "APPROVE_SUB_MOC":
+            # [하위 MOC 신설 승인 -> moc_service 경유]
+            insight_id = msg.get("insight_id", "")
+            parent_moc = msg.get("parent_moc", "")
+            sub_moc_name = msg.get("sub_moc_name", "")
+            try:
+                from moc_service import MOCService
+                moc_service = MOCService(str(vault_io.vault_dir))
+                res = moc_service.create_sub_moc(parent_moc, sub_moc_name)
+                await self.broadcast("SUB_MOC_APPROVED", {
+                    "insight_id": insight_id,
+                    "parent_moc": parent_moc,
+                    "sub_moc_name": sub_moc_name,
+                    "result": res,
+                    "message": f"'{sub_moc_name}' 2계층 MOC가 신설되었습니다."
+                })
+            except Exception as e:
+                logger.error(f"[EventBridge] 하위 MOC 신설 승인 실패: {e}")
+
+        elif msg_type == "APPROVE_UNLINKED_MENTION":
+            # [수평 언링크드 멘션 승인 -> mention_scanner 경유 원자적 치환]
+            insight_id = msg.get("insight_id", "")
+            source_node = msg.get("source_node", "")
+            target_node = msg.get("target_node", "")
+            matched_text = msg.get("matched_text", "")
+            start_char = msg.get("start_char", -1)
+            end_char = msg.get("end_char", -1)
+            postposition = msg.get("postposition", "")
+            try:
+                import mention_scanner
+                doc_path = f"{source_node}.md" if not source_node.endswith(".md") else source_node
+                success = mention_scanner.apply_unlinked_mention_safely(
+                    source_rel_path=doc_path,
+                    target_node=target_node,
+                    start_char=start_char,
+                    end_char=end_char,
+                    matched_text=matched_text,
+                    postposition=postposition
+                )
+                if success:
+                    await self.broadcast("UNLINKED_MENTION_APPROVED", {
+                        "insight_id": insight_id,
+                        "source_node": source_node,
+                        "target_node": target_node,
+                        "matched_text": matched_text,
+                        "message": f"'{source_node}' 본문 속 '{matched_text}'가 [[{target_node}]]로 안전하게 수평 결속되었습니다."
+                    })
+            except Exception as e:
+                logger.error(f"[EventBridge] 언링크드 멘션 승인 실패: {e}")
+
         elif msg_type == "ENRICH_CARD_EXECUTIVE":
             # [직급별 심층 검토 요청]
             task_id = msg.get("task_id", "")
@@ -699,6 +762,64 @@ task_id: {task_id}
                 "message": f"Critic 비판관 검증이 {'활성화' if enabled else '비활성화(무료 쿼터 절약)'} 되었습니다."
             })
 
+        elif msg_type == "GET_VAULT_GRAPH":
+            # [Phase 3] D3.js Force Graph에 전달할 전체 볼트 노드/엣지 네트워크 인출
+            try:
+                from vault_indexer import VaultIndexer
+                v_indexer = VaultIndexer()
+                graph_data = v_indexer.get_graph_data()
+                await websocket.send(json.dumps({
+                    "type": "VAULT_GRAPH_DATA",
+                    "data": graph_data
+                }, ensure_ascii=False))
+            except Exception as e:
+                logger.error(f"[EventBridge] 볼트 그래프 인출 오류: {e}")
+
+        elif msg_type == "GET_VAULT_TREE":
+            # [Obsidian File Explorer] 볼트 내 전체 파일 및 카테고리별 트리 인출
+            try:
+                from vault_indexer import VaultIndexer
+                v_indexer = VaultIndexer()
+                notes = v_indexer.list_notes()
+                categories = {}
+                for n in notes:
+                    cat = n.get("category", "일반")
+                    if cat not in categories:
+                        categories[cat] = []
+                    categories[cat].append({
+                        "name": n["name"],
+                        "h1": n["h1"],
+                        "path": n["path"],
+                        "mtime": n.get("mtime", 0),
+                        "outgoing_count": len(n.get("outgoing_links", []))
+                    })
+                for cat in categories:
+                    categories[cat].sort(key=lambda x: x["name"])
+
+                await websocket.send(json.dumps({
+                    "type": "VAULT_TREE_RESULT",
+                    "data": {
+                        "total_count": len(notes),
+                        "categories": categories
+                    }
+                }, ensure_ascii=False))
+            except Exception as e:
+                logger.error(f"[EventBridge] 볼트 트리 인출 오류: {e}")
+
+        elif msg_type == "GET_NOTE_DETAIL":
+            # [Phase 3] 특정 노드 클릭 시 사이드 패널/작업대용 본문 및 메타 인출
+            node_name = msg.get("name", "")
+            try:
+                from vault_indexer import VaultIndexer
+                v_indexer = VaultIndexer()
+                detail = v_indexer.get_note_detail(node_name)
+                await websocket.send(json.dumps({
+                    "type": "NOTE_DETAIL_RESULT",
+                    "data": detail or {"name": node_name, "error": "Not found"}
+                }, ensure_ascii=False))
+            except Exception as e:
+                logger.error(f"[EventBridge] 노트 상세 인출 오류: {e}")
+
     async def broadcast(self, event_type: str, data: Dict[str, Any]):
         """모든 연결된 대시보드 화면에 실시간 이벤트 브로드캐스팅"""
         card_id = data.get("id") or data.get("task_id")
@@ -722,9 +843,368 @@ task_id: {task_id}
         )
         logger.debug(f"[EventBridge] 브로드캐스트 전송 완료: {event_type} (수신 클라이언트: {len(self.clients)}개)")
 
+    async def process_http_request(self, connection, request):
+        """단일 8765 포트에서 HTTP 대시보드 웹 서빙 및 API 처리 (CORS 프리플라이트 지원)"""
+        upgrade = request.headers.get("Upgrade", "").lower()
+        if upgrade == "websocket":
+            return None  # WebSocket 핸드셰이크는 정상 통과
+
+        # OPTIONS 프리플라이트 요청 즉각 허용
+        method = getattr(request, "method", "GET")
+        if method == "OPTIONS":
+            resp = connection.respond(http.HTTPStatus.NO_CONTENT, "")
+            resp.headers["Access-Control-Allow-Origin"] = "*"
+            resp.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS, PUT, DELETE"
+            resp.headers["Access-Control-Allow-Headers"] = "*"
+            return resp
+
+        resp = await self._route_http_request(connection, request)
+        if resp:
+            resp.headers["Access-Control-Allow-Origin"] = "*"
+            resp.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS, PUT, DELETE"
+            resp.headers["Access-Control-Allow-Headers"] = "*"
+        return resp
+
+    async def _route_http_request(self, connection, request):
+        raw_path = request.path
+        path = raw_path.split("?")[0]
+        if path in ("/", "/dashboard", "/index.html", "/dashboard_prototype.html"):
+            html_path = Path(__file__).parent.parent / "dashboard_prototype.html"
+            if not html_path.exists():
+                html_path = Path(__file__).parent / "dashboard_prototype.html"
+
+            if html_path.exists():
+                html_text = html_path.read_text(encoding="utf-8")
+                resp = connection.respond(http.HTTPStatus.OK, html_text)
+                resp.headers["Content-Type"] = "text/html; charset=utf-8"
+                resp.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+                resp.headers["Pragma"] = "no-cache"
+                resp.headers["Expires"] = "0"
+                return resp
+            return connection.respond(http.HTTPStatus.NOT_FOUND, "Dashboard HTML not found")
+
+        elif path == "/health":
+            body = json.dumps({
+                "status": "LIVE",
+                "clients": len(self.clients),
+                "cards": len(self.cards),
+                "vault_dir": str(VAULT_DIR)
+            }, ensure_ascii=False)
+            resp = connection.respond(http.HTTPStatus.OK, body)
+            resp.headers["Content-Type"] = "application/json; charset=utf-8"
+            return resp
+
+        elif path.startswith("/api/graph"):
+            from vault_indexer import VaultIndexer
+            v_indexer = VaultIndexer()
+            graph_data = v_indexer.get_graph_data()
+            body = json.dumps(graph_data, ensure_ascii=False)
+            resp = connection.respond(http.HTTPStatus.OK, body)
+            resp.headers["Content-Type"] = "application/json; charset=utf-8"
+            resp.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+            return resp
+
+        elif path.startswith("/api/vault/tree"):
+            from vault_indexer import VaultIndexer
+            v_indexer = VaultIndexer()
+            notes = v_indexer.list_notes()
+            categories = {}
+            for n in notes:
+                cat = n.get("category", "일반")
+                if cat not in categories:
+                    categories[cat] = []
+                categories[cat].append({
+                    "name": n["name"],
+                    "h1": n["h1"],
+                    "path": n["path"],
+                    "mtime": n.get("mtime", 0),
+                    "outgoing_count": len(n.get("outgoing_links", []))
+                })
+            for cat in categories:
+                categories[cat].sort(key=lambda x: x["name"])
+            body = json.dumps({
+                "total_count": len(notes),
+                "categories": categories
+            }, ensure_ascii=False)
+            resp = connection.respond(http.HTTPStatus.OK, body)
+            resp.headers["Content-Type"] = "application/json; charset=utf-8"
+            resp.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+            return resp
+
+        elif path.startswith("/api/note"):
+            from urllib.parse import urlparse, parse_qs
+            from vault_indexer import VaultIndexer
+            parsed = urlparse(path)
+            qs = parse_qs(parsed.query)
+            node_name = qs.get("name", [""])[0]
+            v_indexer = VaultIndexer()
+            detail = v_indexer.get_note_detail(node_name)
+            if detail:
+                body = json.dumps(detail, ensure_ascii=False)
+                resp = connection.respond(http.HTTPStatus.OK, body)
+            else:
+                body = json.dumps({"error": "Note not found"}, ensure_ascii=False)
+                resp = connection.respond(http.HTTPStatus.NOT_FOUND, body)
+            resp.headers["Content-Type"] = "application/json; charset=utf-8"
+            resp.headers["Cache-Control"] = "no-cache"
+            return resp
+
+        elif path.startswith("/api/moc/list"):
+            from moc_service import MOCService
+            service = MOCService()
+            mocs = service.list_mocs()
+            body = json.dumps({"mocs": mocs, "total_count": len(mocs)}, ensure_ascii=False)
+            resp = connection.respond(http.HTTPStatus.OK, body)
+            resp.headers["Content-Type"] = "application/json; charset=utf-8"
+            resp.headers["Cache-Control"] = "no-cache"
+            return resp
+
+        elif path.startswith("/api/tags/registry"):
+            from tag_service import TagRegistry
+            reg = TagRegistry()
+            data = {
+                "canonical_tags": sorted(list(reg.canonical_tags)),
+                "tag_categories": reg.tag_categories,
+                "tag_definitions": reg.tag_definitions,
+                "synonyms_by_tag": reg.synonyms_by_tag,
+                "synonym_count": len(reg.synonym_map),
+                "vault_file_path": str(reg.tag_dict_path)
+            }
+            body = json.dumps(data, ensure_ascii=False)
+            resp = connection.respond(http.HTTPStatus.OK, body)
+            resp.headers["Content-Type"] = "application/json; charset=utf-8"
+            resp.headers["Cache-Control"] = "no-cache"
+            return resp
+
+        elif path.startswith("/api/tags/add_synonym"):
+            from urllib.parse import urlparse, parse_qs
+            from tag_service import TagRegistry
+            parsed = urlparse(raw_path)
+            qs = parse_qs(parsed.query)
+            tag = qs.get("tag", [""])[0]
+            synonym = qs.get("synonym", [""])[0]
+            if not tag or not synonym:
+                body = json.dumps({"error": "tag and synonym query params required"}, ensure_ascii=False)
+                resp = connection.respond(http.HTTPStatus.BAD_REQUEST, body)
+            else:
+                reg = TagRegistry()
+                success = reg.add_synonym(tag, synonym)
+                body = json.dumps({
+                    "success": success,
+                    "canonical_tag": tag,
+                    "new_synonym": synonym,
+                    "message": f"동의어 '{synonym}'이(가) '{tag}'에 영구 등록되었습니다." if success else "등록 실패"
+                }, ensure_ascii=False)
+                resp = connection.respond(http.HTTPStatus.OK, body)
+            resp.headers["Content-Type"] = "application/json; charset=utf-8"
+            resp.headers["Cache-Control"] = "no-cache"
+            return resp
+
+        elif path.startswith("/api/moc/audit"):
+            from urllib.parse import urlparse, parse_qs, unquote
+            from dreaming_daemon import DreamingDaemon
+            parsed = urlparse(raw_path)
+            qs = parse_qs(parsed.query)
+            raw_moc = qs.get("moc", ["MOC_커리어"])[0]
+            moc_name = unquote(raw_moc, errors="replace")
+            daemon = DreamingDaemon()
+            res = daemon.audit_moc_relevance(moc_name)
+            body = json.dumps(res, ensure_ascii=True)
+            resp = connection.respond(http.HTTPStatus.OK, body)
+            resp.headers["Content-Type"] = "application/json; charset=utf-8"
+            resp.headers["Cache-Control"] = "no-cache"
+            return resp
+
+        elif path.startswith("/api/moc/diagnose"):
+            from urllib.parse import urlparse, parse_qs, unquote
+            from dreaming_daemon import DreamingDaemon
+            parsed = urlparse(raw_path)
+            qs = parse_qs(parsed.query)
+            raw_moc = qs.get("moc", ["MOC_커리어"])[0]
+            moc_name = unquote(raw_moc, errors="replace")
+            daemon = DreamingDaemon()
+            res = daemon.diagnose_moc_heterogeneity(moc_name)
+            body = json.dumps(res, ensure_ascii=True)
+            resp = connection.respond(http.HTTPStatus.OK, body)
+            resp.headers["Content-Type"] = "application/json; charset=utf-8"
+            resp.headers["Cache-Control"] = "no-cache"
+            return resp
+        elif path.startswith("/api/moc/reassign"):
+            from urllib.parse import urlparse, parse_qs, unquote
+            from moc_service import MOCService
+            parsed = urlparse(raw_path)
+            qs = parse_qs(parsed.query)
+            node = unquote(qs.get("node", [""])[0], errors="replace")
+            target = unquote(qs.get("target", [""])[0], errors="replace")
+            if not node or not target:
+                body = json.dumps({"error": "node and target query params required"}, ensure_ascii=True)
+                resp = connection.respond(http.HTTPStatus.BAD_REQUEST, body)
+            else:
+                service = MOCService()
+                success = service.reassign_node_moc(node, target)
+                body = json.dumps({"success": success, "node": node, "target": target}, ensure_ascii=True)
+                resp = connection.respond(http.HTTPStatus.OK, body)
+            resp.headers["Content-Type"] = "application/json; charset=utf-8"
+            resp.headers["Cache-Control"] = "no-cache"
+            return resp
+
+        elif path.startswith("/api/moc/create_sub_moc"):
+            from urllib.parse import urlparse, parse_qs, unquote
+            from moc_service import MOCService
+            parsed = urlparse(raw_path)
+            qs = parse_qs(parsed.query)
+            name = unquote(qs.get("name", [""])[0], errors="replace")
+            parent = unquote(qs.get("parent", [""])[0], errors="replace")
+            desc = unquote(qs.get("desc", [""])[0], errors="replace")
+            raw_nodes = unquote(qs.get("nodes", [""])[0], errors="replace")
+            initial_nodes = [n.strip() for n in raw_nodes.split(",") if n.strip()] if raw_nodes else None
+
+            if not name or not parent:
+                body = json.dumps({"error": "name and parent query params required"}, ensure_ascii=True)
+                resp = connection.respond(http.HTTPStatus.BAD_REQUEST, body)
+            else:
+                try:
+                    service = MOCService()
+                    file_path = service.create_sub_moc(name, parent, desc, initial_nodes)
+                    body = json.dumps({
+                        "success": True,
+                        "file_path": str(file_path),
+                        "name": name,
+                        "parent": parent,
+                        "nodes": initial_nodes
+                    }, ensure_ascii=False)
+                    resp = connection.respond(http.HTTPStatus.OK, body)
+                except Exception as e:
+                    body = json.dumps({"error": str(e)}, ensure_ascii=False)
+                    resp = connection.respond(http.HTTPStatus.INTERNAL_SERVER_ERROR, body)
+            resp.headers["Content-Type"] = "application/json; charset=utf-8"
+            resp.headers["Cache-Control"] = "no-cache"
+            return resp
+
+        elif path.startswith("/api/moc/merge"):
+            from urllib.parse import urlparse, parse_qs
+            from moc_service import MOCService
+            parsed = urlparse(raw_path)
+            qs = parse_qs(parsed.query)
+            source = qs.get("source", [""])[0]
+            target = qs.get("target", [""])[0]
+            if not source or not target:
+                body = json.dumps({"error": "source and target query params required"}, ensure_ascii=False)
+                resp = connection.respond(http.HTTPStatus.BAD_REQUEST, body)
+            else:
+                try:
+                    service = MOCService()
+                    res = service.merge_mocs(source, target)
+                    body = json.dumps({"success": True, "result": res}, ensure_ascii=False)
+                    resp = connection.respond(http.HTTPStatus.OK, body)
+                except Exception as e:
+                    body = json.dumps({"error": str(e)}, ensure_ascii=False)
+                    resp = connection.respond(http.HTTPStatus.INTERNAL_SERVER_ERROR, body)
+            resp.headers["Content-Type"] = "application/json; charset=utf-8"
+            resp.headers["Cache-Control"] = "no-cache"
+            return resp
+
+        elif path.startswith("/api/subconscious/settings"):
+            from urllib.parse import urlparse, parse_qs
+            from subconscious_service import SubconsciousArchiveService
+            parsed = urlparse(raw_path)
+            qs = parse_qs(parsed.query)
+            svc = SubconsciousArchiveService()
+            if "days" in qs:
+                try:
+                    new_days = int(qs["days"][0])
+                    svc.save_settings({"retention_days": new_days})
+                except Exception as e:
+                    logger.warning(f"[EventBridge] retention_days 파싱 실패: {e}")
+            body = json.dumps(svc.load_settings(), ensure_ascii=False)
+            resp = connection.respond(http.HTTPStatus.OK, body)
+            resp.headers["Content-Type"] = "application/json; charset=utf-8"
+            resp.headers["Cache-Control"] = "no-cache"
+            return resp
+
+        elif path.startswith("/api/subconscious/search"):
+            from urllib.parse import urlparse, parse_qs
+            from subconscious_service import SubconsciousArchiveService
+            parsed = urlparse(raw_path)
+            qs = parse_qs(parsed.query)
+            q = qs.get("q", [""])[0]
+            svc = SubconsciousArchiveService()
+            matched = svc.search_subconscious_archive(q)
+            body = json.dumps({"query": q, "count": len(matched), "results": matched}, ensure_ascii=False)
+            resp = connection.respond(http.HTTPStatus.OK, body)
+            resp.headers["Content-Type"] = "application/json; charset=utf-8"
+            resp.headers["Cache-Control"] = "no-cache"
+            return resp
+
+        elif path.startswith("/api/subconscious/archive_now"):
+            from subconscious_service import SubconsciousArchiveService
+            svc = SubconsciousArchiveService()
+            archived = svc.archive_expired_cards(self.cards)
+            self.save_cards()
+            body = json.dumps({"success": True, "archived_count": len(archived), "items": archived}, ensure_ascii=False)
+            resp = connection.respond(http.HTTPStatus.OK, body)
+            resp.headers["Content-Type"] = "application/json; charset=utf-8"
+            resp.headers["Cache-Control"] = "no-cache"
+            return resp
+
+        elif path.startswith("/api/subconscious/list"):
+            from subconscious_service import SubconsciousArchiveService
+            svc = SubconsciousArchiveService()
+            cards_list = svc.list_subconscious_cards(self.cards)
+            body = json.dumps({"total_count": len(cards_list), "cards": cards_list}, ensure_ascii=False)
+            resp = connection.respond(http.HTTPStatus.OK, body)
+            resp.headers["Content-Type"] = "application/json; charset=utf-8"
+            resp.headers["Cache-Control"] = "no-cache"
+            return resp
+
+        elif path.startswith("/api/subconscious/restore"):
+            from urllib.parse import urlparse, parse_qs
+            from subconscious_service import SubconsciousArchiveService
+            parsed = urlparse(raw_path)
+            qs = parse_qs(parsed.query)
+            card_id = qs.get("id", [""])[0]
+            if not card_id:
+                body = json.dumps({"error": "id parameter required"}, ensure_ascii=False)
+                resp = connection.respond(http.HTTPStatus.BAD_REQUEST, body)
+            else:
+                svc = SubconsciousArchiveService()
+                success = svc.restore_card_to_inbox(card_id, self.cards)
+                self.save_cards()
+                body = json.dumps({"success": success, "id": card_id, "restored": True}, ensure_ascii=False)
+                resp = connection.respond(http.HTTPStatus.OK, body)
+            resp.headers["Content-Type"] = "application/json; charset=utf-8"
+            resp.headers["Cache-Control"] = "no-cache"
+            return resp
+
+        elif path.startswith("/api/subconscious/delete"):
+            from urllib.parse import urlparse, parse_qs
+            from subconscious_service import SubconsciousArchiveService
+            parsed = urlparse(raw_path)
+            qs = parse_qs(parsed.query)
+            card_id = qs.get("id", [""])[0]
+            if not card_id:
+                body = json.dumps({"error": "id parameter required"}, ensure_ascii=False)
+                resp = connection.respond(http.HTTPStatus.BAD_REQUEST, body)
+            else:
+                svc = SubconsciousArchiveService()
+                success = svc.delete_subconscious_card(card_id, self.cards)
+                self.save_cards()
+                body = json.dumps({"success": success, "id": card_id, "deleted": True}, ensure_ascii=False)
+                resp = connection.respond(http.HTTPStatus.OK, body)
+            resp.headers["Content-Type"] = "application/json; charset=utf-8"
+            resp.headers["Cache-Control"] = "no-cache"
+            return resp
+
+        return connection.respond(http.HTTPStatus.NOT_FOUND, "Not Found")
+
     async def start(self):
-        self._server = await websockets.serve(self.register, self.host, self.port)
-        logger.info(f"[EventBridge] WebSocket 실시간 서버 가동 완료: ws://{self.host}:{self.port}")
+        self._server = await websockets.serve(
+            self.register,
+            self.host,
+            self.port,
+            process_request=self.process_http_request
+        )
+        logger.info(f"[EventBridge] 단일 포트 HTTP/WebSocket 관제 가동: http://{self.host}:{self.port} & ws://{self.host}:{self.port}")
         return self._server
 
 

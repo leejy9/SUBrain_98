@@ -3,7 +3,7 @@ import re
 import json
 import datetime
 from pathlib import Path
-from typing import Dict, Any, Tuple, List
+from typing import Dict, Any, Tuple, List, Optional
 import httpx
 from bs4 import BeautifulSoup
 from google import genai
@@ -13,13 +13,18 @@ from config import GEMINI_API_KEY, VAULT_DIR
 from vault_indexer import VaultIndexer
 from models import BlackboardState, CriticEvaluation, SemanticLink, RejectedLink, CognitivePrimitive
 from critic_validator import CriticValidator
+from universal_extractor import universal_extractor
 import vault_io
+from tag_service import TagRegistry
+from moc_service import MOCService
 
 class ConstitutionalAgent:
     def __init__(self):
         self.client = genai.Client(api_key=GEMINI_API_KEY)
         self.indexer = VaultIndexer()
         self.critic = CriticValidator(self.indexer)
+        self.tag_registry = TagRegistry()
+        self.moc_service = MOCService()
         self.model_name = "gemini-3.1-flash-lite"
 
     def set_critic_enabled(self, enabled: bool):
@@ -27,22 +32,9 @@ class ConstitutionalAgent:
         logger.info(f"[ConstitutionalAgent] 비판관 활성화 상태 변경: {enabled}")
 
     def _extract_url_content(self, text: str) -> Tuple[str, str]:
-        """텍스트에서 URL을 탐지하여 웹페이지 내용을 스크랩합니다."""
-        url_match = re.search(r'https?://[^\s]+', text)
-        if not url_match:
-            return "", text
-
-        url = url_match.group(0)
-        try:
-            headers = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"}
-            resp = httpx.get(url, headers=headers, follow_redirects=True, timeout=12.0)
-            soup = BeautifulSoup(resp.text, "html.parser")
-            title = soup.title.string.strip() if soup.title else url
-            paras = [p.get_text().strip() for p in soup.find_all(["p", "article", "h1", "h2", "h3"]) if p.get_text().strip()]
-            content = " ".join(paras[:25])
-            return url, f"[웹페이지 출처: {url}]\n[제목: {title}]\n\n{content}"
-        except Exception as e:
-            return url, f"[웹페이지 링크: {url} (스크랩 실패: {e})]\n\n{text}"
+        """만능 추출기(UniversalExtractor)를 통해 유튜브 자막, 웹 3중 그물망, 텍스트를 추출합니다."""
+        res = universal_extractor.extract_universal(text)
+        return res.url, res.content
 
     def _extract_source_date(self, raw_input: str, url: str = "") -> Tuple[str, str, int]:
         """
@@ -133,12 +125,17 @@ class ConstitutionalAgent:
         dispatcher_prompt = f"""
 당신은 옵시디언 볼트 헌법(00_헌법.md)을 가장 먼저 읽고 신규 입력 정보의 유형을 판별하는 '헌법 디스패처'입니다.
 
-[00_헌법.md 제7조 (모듈 선택 규칙)]:
-| 노트 성격 | 모듈 | type 값 |
-|---|---|---|
-| 빠른 캡처 — 사실/인용/단편 메모, 아직 정제 안 됨 | 모듈_단순기억 | Fleeting |
-| 정제된 개념 지식 — 시장/거시경제 분석, 산업 리서치, 책/논문 개념, 기술/도메인 불변 원리 | 모듈_영구지식 | Permanent |
-| 커리어 — 본인의 실제 업무/프로젝트 경험, 직무 성과, 이력서/자소서 무기 | 모듈_경험정리 | Experience |
+[00_헌법.md 제7조 (모듈 선택 규칙 & 주체성 불변식)]:
+| 노트 성격 | 모듈 | type 값 | 파일 접두사 |
+|---|---|---|---|
+| 빠른 캡처 — 사실/인용/단편 메모, 아직 정제 안 됨 | 모듈_단순기억 | Fleeting | 메모_ |
+| 정제된 개념 지식/노하우 — 외부 URL(인스타/유튜브/웹) 스크랩, 타인의 팁·방법론, 기술/산업 분석, 도메인 불변 원리 | 모듈_영구지식 | Permanent | 지식_ |
+| 커리어 경험 — **사용자 본인이 직접 겪은 1인칭 실제 업무/프로젝트, 나의 트러블슈팅 및 성과 증명** | 모듈_경험정리 | Experience | 경험_ |
+
+[🚨 최우선 분류 철칙: 주체성 불변식 (First-Person vs External Scrap)]:
+1. **외부 소스(URL, 웹페이지, 인스타그램, 유튜브, 블로그, 아티클, PDF)에서 스크랩해온 정보는, 그 내용이 '이력서 작성법', '면접 팁', 'STAR 기법', '취업 꿀팁', '채용 분석'이라 할지라도 '사용자 자신의 경험'이 아니라 '타인의 방법론/외부 지식'입니다.**
+   -> 따라서 절대로 '모듈_경험정리'로 분류하지 말고, 반드시 **'모듈_영구지식'(Permanent, 접두사 '지식_')**으로 분류하세요!
+2. **'모듈_경험정리'는 오직 사용자가 "내가 회사/프로젝트에서 ~를 담당했다", "내가 ~문제를 해결했다"처럼 본인이 직접 실행한 1인칭 경험을 구술/작성했을 때만 선택합니다.**
 
 [신규 입력 원문]:
 {raw_text_payload[:2500]}
@@ -155,7 +152,7 @@ class ConstitutionalAgent:
   "module_name": "모듈_영구지식" 또는 "모듈_경험정리" 또는 "모듈_단순기억",
   "target_moc": "MOC_지식원리" 또는 "MOC_커리어" 또는 "MOC_아이디어",
   "prefix": "지식_" 또는 "경험_" 또는 "메모_",
-  "reasoning": "00_헌법 §7에 따라 이 유형으로 분류한 구체적 판단 근거"
+  "reasoning": "00_헌법 §7 주체성 불변식에 따라 이 유형으로 분류한 구체적 판단 근거"
 }}
 """
         disp_resp = self._generate_with_retry(
@@ -171,6 +168,7 @@ class ConstitutionalAgent:
         target_moc = disp_data.get("target_moc", "MOC_지식원리" if classified_type == "Permanent" else "MOC_커리어")
         prefix = disp_data.get("prefix", "지식_" if classified_type == "Permanent" else "경험_")
         dispatch_reasoning = disp_data.get("reasoning", "")
+        tag_summary = self.tag_registry.get_allowed_tags_summary()
 
         # [2단계: 해당 모듈 규칙 로드 & 모듈 맞춤형 가설 생성]
         module_text = self.indexer.get_module(module_name)
@@ -181,6 +179,10 @@ class ConstitutionalAgent:
 
 [적용 모듈: {module_name}.md]:
 {module_text[:1500]}
+
+[공식 통제 태그 사전]:
+{tag_summary}
+※ 주의: competencies는 반드시 위 통제 사전의 공식 태그(#역량/..., #상황/...) 중에서만 선택하십시오.
 
 [00_헌법 요약]:
 {constitution[:600]}
@@ -269,6 +271,10 @@ class ConstitutionalAgent:
 [적용 모듈: {module_name}.md]:
 {module_text[:1500]}
 
+[공식 통제 태그 사전]:
+{tag_summary}
+※ 주의: competencies는 반드시 위 통제 사전의 공식 태그(#역량/..., #상황/..., #도메인/...) 중에서만 1~3개를 선택하십시오.
+
 [00_헌법 요약]:
 {constitution[:600]}
 
@@ -319,6 +325,11 @@ class ConstitutionalAgent:
         gen_data = json.loads(gen_resp.text)
 
         raw_filename = gen_data.get("filename", f"{prefix}{datetime.date.today().strftime('%m%d_%H%M%S')}.md")
+        # [파일명 방어]: URL이나 슬래시가 파일명으로 잘못 반환되는 것 방지
+        if "http://" in raw_filename or "https://" in raw_filename or "/" in raw_filename or len(raw_filename) > 40:
+            summary_clean = re.sub(r'[^a-zA-Z0-9가-힣]', '', gen_data.get('one_line_summary', '메모'))[:12]
+            raw_filename = f"{prefix}{datetime.date.today().strftime('%m%d')}_{summary_clean or '수집노트'}.md"
+
         target_inbox_path, rel_filename = vault_io.resolve_unique_inbox_path(raw_filename)
         filename = target_inbox_path.name
 
@@ -343,15 +354,19 @@ class ConstitutionalAgent:
         else:
             link_lines.append(f"- [[{target_moc}]] (⚠️ 85점 이상 검증된 인과 관계가 없어 상위 MOC에 안전 격리 배치)")
 
-        competencies = gen_data.get("competencies", [])
-        comp_tags = " ".join(f"#{c.replace('[[', '').replace(']]', '')}" for c in competencies) if competencies else ""
-        comp_links = ", ".join(f"[[{c.replace('[[', '').replace(']]', '')}]]" for c in competencies) if competencies else "(없음)"
+        raw_competencies = gen_data.get("competencies", [])
+        canonical_tags, unmapped_tags = self.tag_registry.canonicalize_list(raw_competencies)
+
+        comp_tags = " ".join(canonical_tags) if canonical_tags else ""
+        comp_links = ", ".join(f"[[{c.lstrip('#')}]]" for c in canonical_tags) if canonical_tags else "(없음)"
 
         # 비판관 감사 로그 블록
         critic_log_lines = [
             f"> - 헌법 디스패처 판정: [[{module_name}]] 선택 ({classified_type}) — {dispatch_reasoning}",
             f"> - 비판관 총평: {critic_eval.evaluation_log}"
         ]
+        if unmapped_tags:
+            critic_log_lines.append(f"> - ⚠️ [신규 태그 발의 (인간 승인 대기)] 미등재 태그 감지: {', '.join(unmapped_tags)}")
         if critic_eval.passed_links:
             for pl in critic_eval.passed_links:
                 critic_log_lines.append(f"> - [승인] [[{pl.target_node}]]: {pl.primitive.value} ({pl.weight * 100:.0f}점)")
@@ -449,13 +464,19 @@ class ConstitutionalAgent:
 - {comp_links}
 """
 
+        source_url_line = f'source_url: "{url}"\n' if url else ''
+        source_link_block = f"> 🌐 **원천 출처 (Source URL)**: [{url}]({url})\n" if url else ""
+
+        all_frontmatter_tags = [f"#{classified_type.lower()}"] + [t for t in canonical_tags if t]
+        tags_yaml_str = ", ".join(f'"{t}"' for t in all_frontmatter_tags)
+
         markdown_content = f"""---
 aliases: ["{gen_data.get('one_line_summary', filename[:-3])}"]
-tags: ["#{classified_type.lower()}", "{comp_tags}".strip()]
+tags: [{tags_yaml_str}]
 date: {today_str}
 source_date: {source_date}
 recorded_at: {recorded_at_str}
-lag_days: {lag_days}
+{source_url_line}lag_days: {lag_days}
 status: 완료
 type: {classified_type}
 moc: "[[{target_moc}]]"
@@ -464,7 +485,7 @@ moc: "[[{target_moc}]]"
 {body_content}
 
 > [!QUOTE] 원문 맥락 창고 (Zero-Loss Archive)
-> {raw_text_payload}
+{source_link_block}> {raw_text_payload}
 
 ---
 > [!NOTE] 🤖 Critic Reasoning & Audit Trail
@@ -578,11 +599,12 @@ moc: "[[{target_moc}]]"
         return {
             "success": True,
             "filename": filename,
-            "filepath": str(target_path),
+            "filepath": str(target_inbox_path),
             "markdown_content": markdown_content,
             "briefing": briefing,
             "is_auto_committed": is_auto_committed,
             "status": final_status,
+            "source_url": url,
             "warning": warning_info,
             "integrity_score": overall_integrity_score,
             "source_date": source_date,
@@ -712,8 +734,14 @@ moc: "[[{target_moc}]]"
         파일을 영구 삭제하지 않고 _archive/tombstones/로 이동시키며 지식 계보(Audit Trail)를 각인합니다.
         파일이 디스크에 아직 저장되지 않은 스테이징 상태일 경우 전달된 content를 바탕으로 즉시 묘비 레코드를 생성합니다.
         """
-        if not filename.endswith(".md"):
-            filename = f"{filename}.md"
+        # URL이나 경로 구분자가 포함된 비정상 파일명 보호 (Sanitizer)
+        clean_name = Path(filename).name
+        clean_name = re.sub(r'[\\/*?:"<>|]', '_', clean_name)
+        if clean_name.startswith("http"):
+            clean_name = re.sub(r'^https?_+', '메모_웹수집_', clean_name)
+        if not clean_name.endswith(".md"):
+            clean_name = f"{clean_name}.md"
+        filename = clean_name
 
         source_path = VAULT_DIR / filename
         tombstone_dir = VAULT_DIR / "_archive" / "tombstones"
@@ -829,10 +857,248 @@ moc: "[[{target_moc}]]"
             }
         ]
 
+        moc_moves = [
+            {
+                "id": "MOC-MOVE-01",
+                "type": "moc_move",
+                "source_node": "경험_외인순매도분석",
+                "current_moc": "MOC_커리어",
+                "target_node": "MOC_지식원리",
+                "suggested_moc": "MOC_지식원리",
+                "confidence_score": 88,
+                "status": "PENDING",
+                "source_point": "외국인 투자자의 선물/옵션 순매도와 환율 변동성 간의 선행성 계량 분석",
+                "target_point": "지식원리 허브: 금융시장 거시 변수 및 계량 분석 원리 집결지",
+                "match_rationale": "해당 문서는 특정 회사에서의 단기 개인 경험담이라기보다, 외국인 수급과 파생상품 포지션이 현물 지수에 미치는 '시장 메커니즘 원리'를 다룬 계량 지식에 훨씬 가깝습니다. [[MOC_지식원리]]로 소속을 이전할 경우, 향후 투자 전략 수립 시 해당 원리의 재사용성이 극대화됩니다.",
+                "transfer_action": "노드의 Frontmatter 'moc: MOC_커리어'를 'moc: MOC_지식원리'로 안전 이전 (Wikilink 및 역방향 인덱스 자동 갱신)"
+            }
+        ]
+
+        # [Ground Truth 기반 MOC 분할 제안]: 실제 볼트의 넥스트러너스 실존 7개 노드 전수 바인딩
+        from vault_indexer import VaultIndexer
+        v_idx = VaultIndexer()
+        all_notes = v_idx.list_notes()
+        nr_notes = [n for n in all_notes if "넥스트러너스" in n["name"]]
+        
+        nr_candidates = []
+        for n in nr_notes:
+            content = ""
+            note_obj = vault_io.read_note(f"{n['name']}.md")
+            if note_obj:
+                content = note_obj.get("content", "")
+            
+            # 발췌록 (원문 200자)
+            lines = [l for l in content.split("\n") if l.strip() and not l.startswith("---") and not l.startswith("#")]
+            excerpt = lines[0] if lines else "세부 본문 기록 완료"
+
+            nr_candidates.append({
+                "name": n["name"],
+                "h1": n.get("h1") or n["name"],
+                "tags": n.get("tags") or ["#경험", "#사업개발"],
+                "excerpt": excerpt[:150] + "..." if len(excerpt) > 150 else excerpt
+            })
+
+        sub_mocs = [
+            {
+                "id": "SUB-MOC-NEXTRUNNERS",
+                "type": "sub_moc",
+                "parent_moc": "MOC_커리어",
+                "source_node": "MOC_커리어",
+                "target_node": "MOC_넥스트러너스_사업개발",
+                "proposed_sub_moc": "MOC_넥스트러너스_사업개발",
+                "child_count": len(nr_candidates),
+                "confidence_score": 96,
+                "status": "PENDING",
+                "candidate_nodes": nr_candidates,
+                "source_point": f"MOC_커리어 산하에 넥스트러너스 초기 창업·사업개발·조직운영 관련 실존 노드 {len(nr_candidates)}개가 높은 결속도로 밀집",
+                "target_point": "하위 성단: 초기 스타트업 사업개발(BD), 고객 불신 극복, 자발적 참여 구조화 실전 지혜 집결지",
+                "match_rationale": f"현재 [[MOC_커리어]] 산하에는 서로 다른 성격의 경험들이 섞여 있습니다. 특히 '넥스트러너스' 관련 노드 {len(nr_candidates)}개는 [초기 창업 현장에서의 고객 설득, 커리큘럼 설계, 조직 참여 유도]라는 매우 뚜렷한 단일 프로젝트 맥락을 형성하고 있어, 별도의 2계층 MOC `[[MOC_넥스트러너스_사업개발]]`로 분할 독립시키는 것이 향후 스타트업/사업개발 포트폴리오 인출 시 맥락 왜곡을 막는 최선의 설계입니다.",
+                "transfer_action": f"[[MOC_넥스트러너스_사업개발.md]] 2계층 MOC 문서를 신설하고, 실제 실존 노드 {len(nr_candidates)}개의 소속 Frontmatter를 하위 성단으로 안전 이전"
+            }
+        ]
+
+        # [수평 언링크드 멘션 스캐너 연동]: 볼트 전수 실존 경험 인용부 자동 탐지 (Top 3)
+        import mention_scanner
+        unlinked_mentions = []
+        try:
+            vault_mentions = mention_scanner.scan_vault_for_unlinked_mentions(max_results=3)
+            for m in vault_mentions:
+                t_node = m["target_node"]
+                t_fname = f"{t_node}.md" if not t_node.endswith(".md") else t_node
+                t_note = vault_io.read_note(t_fname)
+                t_quote = ""
+                t_sec = "§ 핵심 지혜 및 정량 성과"
+                if t_note and t_note.get("content"):
+                    content_clean = re.sub(r"^---[\s\S]*?---\n", "", t_note["content"])
+                    for ln in content_clean.split("\n"):
+                        s = ln.strip()
+                        if s and not s.startswith("#") and len(s) > 15:
+                            t_quote = s[:120]
+                            break
+                if not t_quote:
+                    t_quote = f"{t_node} 실전 지혜 및 정량 성과 카드"
+
+                unlinked_mentions.append({
+                    "id": m["id"],
+                    "type": "unlinked_mention",
+                    "source_node": m["source_node"],
+                    "target_node": m["target_node"],
+                    "matched_text": m["matched_text"],
+                    "postposition": m.get("postposition", ""),
+                    "line_number": m["line_number"],
+                    "source_context": m["source_context"],
+                    "confidence_score": m["confidence_score"],
+                    "status": "PENDING",
+                    "source_section": f"§ 문서 {m['line_number']}행 발췌",
+                    "source_point": f"문서 {m['line_number']}행에서 '{m['matched_text']}' 경험 인용",
+                    "target_section": t_sec,
+                    "target_point": f"경험 원문: [[{m['target_node']}]] 실전 지혜",
+                    "match_rationale": f"[[{m['source_node']}]] 작성 시 내 경험 카드의 지혜를 실질적으로 인출하여 작성했으나, 본문에 단순 텍스트로 표기되어 지식 그래프 상에서 외곽에 완전히 고립되어 있습니다. 본문 훼손 없이 안전하게 수평 위키링크로 결속할 것을 권고합니다.",
+                    "transfer_action": f"본문 텍스트는 원형 보존하고, 하단에 인출 출처 콜아웃([!info] 🔗 수평 결속 지식: [[{m['target_node']}]])을 부착하여 백링크를 완벽 결속합니다.",
+                    "source_quote": m["matched_text"],
+                    "target_quote": t_quote,
+                    "start_char": m["start_char"],
+                    "end_char": m["end_char"]
+                })
+        except Exception as e:
+            logger.error(f"[agent_core] 볼트 전수 unlinked mention 스캔 실패 (무시됨): {e}")
+
+        def _enrich_note_markdown(item: Dict[str, Any]):
+            # source note markdown
+            s_name = item.get("source_node") or item.get("parent_moc")
+            if s_name:
+                fname = f"{s_name}.md" if not s_name.endswith(".md") else s_name
+                note = vault_io.read_note(fname)
+                if note and note.get("content"):
+                    item["source_markdown"] = note["content"]
+
+            # target note markdown
+            t_name = item.get("target_node") or item.get("suggested_moc") or item.get("proposed_sub_moc")
+            if t_name:
+                fname = f"{t_name}.md" if not t_name.endswith(".md") else t_name
+                note = vault_io.read_note(fname)
+                if note and note.get("content"):
+                    item["target_markdown"] = note["content"]
+
+        for item in high_confidence:
+            _enrich_note_markdown(item)
+        for item in exploratory:
+            _enrich_note_markdown(item)
+        for item in moc_moves:
+            _enrich_note_markdown(item)
+        for item in sub_mocs:
+            _enrich_note_markdown(item)
+        for item in unlinked_mentions:
+            _enrich_note_markdown(item)
+
+        total_queue = len(high_confidence) + len(exploratory) + len(moc_moves) + len(sub_mocs) + len(unlinked_mentions)
+
         return {
             "high_confidence": high_confidence,
-            "queue_count": 3,
             "exploratory_serendipity": exploratory,
+            "moc_moves": moc_moves,
+            "sub_mocs": sub_mocs,
+            "unlinked_mentions": unlinked_mentions,
+            "queue_count": total_queue,
             "last_evaluated_at": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         }
+
+    def execute_devil_advocate_copilot(
+        self,
+        title: str,
+        filename: str,
+        markdown_content: str,
+        prompt: str,
+        history: Optional[List[Dict[str, Any]]] = None,
+        synthesis: str = ""
+    ) -> Dict[str, Any]:
+        """[Phase 2 F3 불변식] 악마의 대변인(Devil's Advocate) 대화 하네스
+
+        1. Sycophancy 0% 철칙: '좋은 생각입니다', '동의합니다' 등 기계적 아첨 절대 금지.
+        2. 반론 및 트레이드오프 강제 질문: 기존 볼트 내 지식과 대조하여 반드시 1개 이상의 반론, 한계, 충돌 가능성을 질문.
+        3. 맥락 합의 시 본문 갱신: 사용자가 납득 가능한 논리를 제시하면 본문의 1.한 줄 요약, CCIA 인과 사슬, 기록 시점의 중요성에 즉시 반영하여 수정 Diff Proposal 반환.
+        """
+        vault_summary = self.indexer.get_context_for_prompt(max_items=40)
+
+        history_text = ""
+        if history:
+            recent = history[-6:]
+            h_lines = []
+            for h in recent:
+                r = "사용자" if h.get("role") == "user" else "AI 비판관"
+                h_lines.append(f"- {r}: {h.get('content', '')}")
+            history_text = "\n[이전 대화 맥락]:\n" + "\n".join(h_lines)
+
+        system_prompt = f"""당신은 사용자의 옵시디언 영구 지식 베이스를 엄격하게 방어하고 검증하는 '악마의 대변인(Devil's Advocate) AI 비판관'입니다.
+
+[절대 불변식 1: 아첨(Sycophancy) 0% 금지 규칙]
+- "좋은 질문입니다", "훌륭한 통찰이네요", "동의합니다", "정말 맞습니다" 같은 불필요한 칭찬, 아첨, 기계적 동조는 엄격히 금지됩니다.
+- 오직 차분하고 냉철한 엔지니어링/비즈니스 아키텍트의 시선으로, 논리적 허점과 트레이드오프를 직설적으로 짚으세요.
+
+[절대 불변식 2: 기존 볼트 노드 대조 및 반론 강제 질문]
+- 사용자가 던진 생각/맥락을 검토할 때, 아래 [기존 옵시디언 볼트 노드 목록]을 스캔하여 '기존 지식과의 잠재적 충돌, 비용, 운영 복잡도, 엣지 케이스' 관점에서 반드시 1개 이상의 반론이나 경계 조건을 날카롭게 질문하세요.
+
+[절대 불변식 3: 사실 무결성 (Fact Guard)]
+- 원문에 없는 수치(%, 연도, 금액 등)를 마음대로 날조하지 마세요.
+
+[문서 메타데이터]:
+- 제목: {title}
+- 파일명: {filename}
+
+[기존 옵시디언 볼트 노드 목록]:
+{vault_summary}
+
+[현재 마크다운 문서 전문]:
+```markdown
+{markdown_content or synthesis}
+```
+{history_text}
+
+[사용자의 이번 발화 (맥락 주입/질문)]:
+{prompt}
+
+[응답 생성 지침]:
+1. 사용자가 자신의 관점/의도를 입력했을 때:
+   - 사용자의 의견을 비판적으로 수용하되, 기존 볼트의 체계와 충돌하는 지점(예: 복잡도 증가, 레이턴시, 단일 장애점, 헌법 위배 등)을 지적하며 도발적인 반론 질문을 던지세요.
+   - 동시에, 사용자가 요청한 맥락이 반영될 경우 본문이 어떻게 바뀌어야 하는지 마크다운 전문(Frontmatter 포함)을 `updated_markdown`에 정교하게 완성하세요.
+   - 본문의 `## 1. 한 줄 요약`, `## CCIA 인과 사슬`, `## 4. 기록 시점의 중요성`에 사용자의 관점이 녹아들도록 재구성하세요.
+   - is_modification: true
+
+2. 단순 질문이나 사실 확인인 경우:
+   - 간결하고 명확하게 답변하되 비판적 시각을 유지하세요.
+   - is_modification: false, updated_markdown: ""
+
+반드시 마크다운 코드블록(```json) 없이 순수 JSON 포맷으로만 응답하세요:
+{{
+  "assistant_response": "악마의 대변인 비판관 답변 (반론 및 질문 포함)",
+  "is_modification": true,
+  "updated_synthesis": "새로운 맥락이 반영된 1~2줄 핵심 요약",
+  "updated_markdown": "수정된 완성형 옵시디언 마크다운 전문 (Frontmatter 포함, 수정 없을 시 빈 문자열)"
+}}"""
+
+        try:
+            resp = self._generate_with_retry(contents=[system_prompt])
+            raw_text = resp.text.strip()
+            if raw_text.startswith("```"):
+                lines = raw_text.splitlines()
+                if lines[0].startswith("```"): lines = lines[1:]
+                if lines and lines[-1].startswith("```"): lines = lines[:-1]
+                raw_text = "\n".join(lines).strip()
+
+            parsed = json.loads(raw_text)
+            return {
+                "assistant_response": parsed.get("assistant_response", raw_text),
+                "is_modification": parsed.get("is_modification", False),
+                "updated_synthesis": parsed.get("updated_synthesis", synthesis),
+                "updated_markdown": parsed.get("updated_markdown", "")
+            }
+        except Exception as e:
+            logger.error(f"Devil's Advocate generation failed: {e}")
+            return {
+                "assistant_response": f"AI 비판관 분석 중 일시적 오류가 발생했습니다: {e}",
+                "is_modification": False,
+                "updated_synthesis": synthesis,
+                "updated_markdown": ""
+            }
+
 

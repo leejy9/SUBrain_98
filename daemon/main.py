@@ -1,5 +1,11 @@
 import asyncio
 import logging
+import sys
+import os
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from event_bridge import event_bridge
 from telegram_bot import create_application
 
