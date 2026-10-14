@@ -95,6 +95,21 @@ webview-ui/      화면: React와 캔버스로 그린 픽셀 사무실
 
 ---
 
+## 6. 멀티 엔진 (Claude Code · Codex · Gemini) 연동
+
+- Pixel Agents는 이미 **엔진별 어댑터(Provider) 구조**예요. `core/src/provider.ts`가 엔진과 상관없는 공통 이벤트(`toolStart`, `toolEnd`, `turnEnd`, `subagentStart`, `permissionRequest` 등)를 정의하고, 지금은 `server/src/providers/hook/claude`만 구현돼 있어요. README 로드맵에도 Codex와 Gemini가 올라 있어요.
+- 우리 백엔드도 같은 원칙으로 설계해요: **엔진마다 어댑터 하나, 위로는 공통 이벤트만.**
+
+| 엔진 | 실행 방법 (비대화형) | 직원 지시문 위치 | 사용량 |
+|---|---|---|---|
+| Claude Code | `claude -p` / Claude Agent SDK | `.claude/agents/*.md`, `CLAUDE.md` | Claude 플랜 |
+| Codex | `codex exec` / Codex SDK | `AGENTS.md` | ChatGPT 플랜 또는 OpenAI API |
+| Gemini | `gemini -p` (Gemini CLI) | `GEMINI.md` | Google 계정 또는 Gemini API |
+
+- **Antigravity 주의**: Antigravity는 IDE라서 외부 앱이 일을 시킬 수 있는 공식 실행 통로가 없어요. Gemini 연동은 **Gemini CLI** 기준으로 하고, Antigravity 한도와 Gemini CLI 한도가 같은지는 확인이 필요해요.
+- **직원 정의는 우리 형식 하나로 저장**하고, 일을 시킬 때 엔진에 맞는 형식으로 변환해요. 같은 직원을 Claude, Codex, Gemini 어느 엔진으로든 돌릴 수 있게 돼요.
+- 이점: 한 엔진의 한도가 다 차면 다른 엔진으로 넘기기(폴백), 단계별로 엔진 섞기(예: 초안은 Gemini, 검수는 Claude).
+
 ## 출처
 - Pixel Agents: https://github.com/pixel-agents-hq/pixel-agents (LICENSE, README, CONTEXT.md, core/asyncapi.yaml, CHANGELOG #117)
 - Agent Office: https://github.com/alminisl/agent-office (README "License: TBD")
