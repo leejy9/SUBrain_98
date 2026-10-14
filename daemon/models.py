@@ -99,6 +99,21 @@ class ThinkingStep(BaseModel):
     elapsed_ms: Optional[int] = None
 
 
+class TriageRecommendation(str, Enum):
+    """Two-Speed Triage 추천 상태"""
+    FAST_TRACK_ELIGIBLE = "FAST_TRACK_ELIGIBLE"    # ⚡ 즉시 승인 가능 (단순 팩트/뉴스)
+    DEEP_TUNE_RECOMMENDED = "DEEP_TUNE_RECOMMENDED"  # 🧠 딥 튜닝 권장 (맥락 주입 필요)
+
+
+class IngestScoreMetadata(BaseModel):
+    """3대 보조 스코어링 지표"""
+    information_density: float = Field(default=50.0, ge=0.0, le=100.0, description="수치 및 전문어 비율 (0~100)")
+    vault_proximity: float = Field(default=50.0, ge=0.0, le=100.0, description="옵시디언 볼트 82개 영구 노드 근접도 (0~100)")
+    human_intent_boost: float = Field(default=0.0, ge=0.0, le=20.0, description="사용자 메모 동봉 시 +20점 부스트")
+    total_score: float = Field(default=50.0, ge=0.0, le=100.0, description="종합 점수")
+    triage_recommendation: TriageRecommendation = Field(default=TriageRecommendation.FAST_TRACK_ELIGIBLE)
+
+
 class TaskCard(BaseModel):
     """웹 대시보드 및 텔레그램 큐에서 관리되는 표준 작업 카드"""
     task_id: str
@@ -113,3 +128,5 @@ class TaskCard(BaseModel):
     markdown_draft: Optional[str] = None
     warning_message: Optional[str] = None
     integrity_score: float = 100.0
+    scoring_metadata: Optional[IngestScoreMetadata] = None
+
